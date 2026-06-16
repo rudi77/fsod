@@ -1,0 +1,15 @@
+# LiteLLM-Proxy als MCP-Gateway.
+# Wir registrieren UNSEREN Demo-Server als Upstream-MCP-Server. Der Client (das Notebook)
+# spricht nur noch mit LiteLLM unter /mcp - LiteLLM leitet jeden Tool-Aufruf an den
+# passenden Upstream-Server weiter und praefixt die Tool-Namen mit dem Alias.
+
+model_list: []          # In diesem Demo nutzt LiteLLM NUR die MCP-Gateway-Funktion (kein LLM-Routing).
+
+mcp_servers:
+  demo:                 # <- dieser Alias wird zum Praefix der Tool-Namen ("demo-add", ...)
+    url: "http://demo-mcp:8000/mcp"   # Service-Name im docker-compose-Netz (kein host.docker.internal noetig)
+    transport: "http"                 # streamable-http (MCP SDK)
+    description: "Demo-Knowledge-Server: current_time, add, search_kb"
+
+general_settings:
+  master_key: sk-1234   # Zugriffsschutz: der Client muss diesen Key als x-litellm-api-key senden

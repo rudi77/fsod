@@ -64,6 +64,41 @@ uv run jupyter lab
 - **`push`** ist in Kapitel 10 bewusst auskommentiert (braucht Remote + Auth).
 - **Zeitbudget:** Kapitel 3–4 sind der Aha-Moment — dort Ruhe lassen. Kapitel 7–9 notfalls straffen.
 
+## MCP-Notebooks (Aufbau-Reihenfolge)
+
+Zwei aufeinander aufbauende Notebooks zeigen, wie **derselbe Agentic Loop** seine Tools statt aus lokalem Code über das **Model Context Protocol (MCP)** bezieht — erst direkt, dann über ein **Gateway**.
+
+| # | Notebook | Inhalt | Voraussetzung |
+|---|---|---|---|
+| 1 | `AI_Agents_MCP.ipynb` | Tools von einem **echten MCP-Server** (eigener Prozess, JSON-RPC über **stdio**) — `list_tools()` / `call_tool()` | nur `.env` (Azure OpenAI) |
+| 2 | `AI_Agents_MCP_Gateway.ipynb` | Mehrere Server hinter **einem** Endpoint: **LiteLLM** als MCP-Gateway, Transport **streamable-http**, Auth per API-Key, Tool-**Namespacing** (`demo-add`) | zusätzlich **Docker Desktop** |
+
+Reihenfolge: erst Notebook 1 (MCP-Grundlagen), dann Notebook 2 (Gateway). Beide teilen sich die Tool-Definitionen in **`mcp_demo_server.py`**.
+
+### Gateway-Infrastruktur (Docker Compose)
+
+Notebook 2 startet die Infrastruktur **deklarativ** — kein Prozess-Management mehr im Notebook:
+
+| Datei | Rolle |
+|---|---|
+| `docker-compose.yml` | startet `demo-mcp` (unser Server) + `litellm` (Gateway) in einem Netz |
+| `Dockerfile.mcp` | Mini-Image: Python + `mcp`-SDK + Server-Dateien |
+| `litellm_config.yaml` | registriert den Demo-Server als Upstream (`http://demo-mcp:8000/mcp`), setzt den `master_key` |
+| `mcp_http_server.py` | exponiert dieselben Tools über streamable-http |
+
+Im Compose-Netz erreicht LiteLLM den Demo-Server über den **Service-Namen** `demo-mcp` — kein `host.docker.internal`, kein Port-Mapping für den Demo-Server. Nur das Gateway ist auf `localhost:4000` sichtbar.
+
+Die Zellen in Notebook 2 rufen die Compose-Befehle selbst auf; von Hand geht es so:
+
+```powershell
+docker compose up -d --build     # demo-mcp + litellm hochfahren (erster Start baut/zieht Images)
+docker compose ps                # Status
+# ... Notebook 2 ausführen: verbindet auf http://localhost:4000/mcp ...
+docker compose down              # beide Container stoppen + entfernen, :4000 freigeben
+```
+
+> 🪟 **Windows/Jupyter:** Beide Notebooks führen die MCP-Aufrufe in einem eigenen Thread mit `ProactorEventLoop` aus (`run_async`) — nötig, damit Subprozesse/Streams unabhängig von Jupyters Event-Loop laufen.
+
 ## Notebook neu bauen
 
 Inhalt liegt editierbar in `notebook_source.txt` (Zell-Marker `<<<MD>>>` / `<<<CODE>>>`).

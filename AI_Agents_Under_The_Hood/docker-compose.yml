@@ -1,0 +1,27 @@
+# MCP-Gateway-Infrastruktur fuer das Notebook AI_Agents_MCP_Gateway.ipynb.
+#
+# Zwei Services in einem Netz:
+#   demo-mcp : unser Demo-Server (current_time, add, search_kb) ueber streamable-http
+#   litellm  : der LiteLLM-Proxy als MCP-Gateway, erreichbar auf http://localhost:4000
+#
+# LiteLLM spricht den Demo-Server ueber den Service-Namen 'demo-mcp' an (siehe
+# litellm_config.yaml) - deshalb braucht der Demo-Server kein Port-Mapping zum Host.
+#
+# Starten:  docker compose up -d --build      Stoppen:  docker compose down
+
+services:
+  demo-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+    # Kein "ports:" noetig - nur LiteLLM (im selben Netz) spricht mit diesem Service.
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    ports:
+      - "4000:4000"                       # nur das Gateway ist vom Host (Notebook) aus erreichbar
+    volumes:
+      - ./litellm_config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    depends_on:
+      - demo-mcp

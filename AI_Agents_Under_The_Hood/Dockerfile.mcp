@@ -1,0 +1,12 @@
+# Unser Demo-MCP-Server als HTTP-Service (streamable-http) fuer das Gateway.
+# Bewusst winzig: Python + das offizielle mcp-SDK + unsere zwei Dateien.
+FROM python:3.12-slim
+
+WORKDIR /app
+RUN pip install --no-cache-dir "mcp>=1.2.0"
+
+# Dieselben Tools wie im MCP-Notebook (mcp_demo_server.py) - nur per HTTP exponiert.
+COPY mcp_demo_server.py mcp_http_server.py ./
+
+EXPOSE 8000
+CMD ["python", "mcp_http_server.py"]
