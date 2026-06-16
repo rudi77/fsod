@@ -129,6 +129,19 @@ Als Demo läuft das Notebook gegen das **TuttiPaletti**-Repo (BTK-Palettenkläru
 
 > Tools/MCP = **Fähigkeiten** (was der Agent *tun* kann), Skills = **Wissen/Vorgehen** (*wie* er es tut). Es bleibt **derselbe Agent-Loop** wie in den anderen Notebooks.
 
+## Parallel-&-Sub-Agents-Notebook (`AI_Agents_Parallel_SubAgents.ipynb`)
+
+Zeigt zwei Skalierungsmuster *from scratch* — beide bauen auf **demselben** `run_agent`-Loop auf:
+
+| Muster | Idee |
+|---|---|
+| **Parallele Tool-Calls** | Das Modell liefert **mehrere** `tool_calls` in *einer* Antwort. Ein `ThreadPoolExecutor` führt die Batch **nebenläufig** aus statt nacheinander. |
+| **Sub-Agents als Tool** | Ein **Orchestrator** hat das Tool `delegate(auftrag)`. Jeder Aufruf startet einen eigenständigen Agent-Loop (eigener Kontext, eigene Tools) und gibt nur das **Ergebnis** zurück — Kontext-Isolation + Spezialisierung (Supervisor / Map-Reduce). |
+
+Die Demo (nur `.env` nötig, kein Internet) nutzt drei „langsame" Tools (`wetter`/`einwohner`/`zeitzone`, je simulierte Latenz) und vergleicht **seriell vs. parallel** mit gestoppter Wanduhr. Der Orchestrator delegiert dann drei Städte an drei Sub-Agenten **parallel**, wobei jeder Sub-Agent seine Tools wiederum parallel ruft — die verschränkten `[sub:...]`-Trace-Zeilen sind der sichtbare Beweis der Nebenläufigkeit.
+
+> ⚠️ Nur **nebenläufigkeitssichere** Tools parallel ausführen (Reads/Lookups). Schreibende Tools mit geteiltem Zustand brauchen Locks oder serielle Ausführung. Der `AzureOpenAI`-Client ist thread-safe, daher dürfen mehrere Sub-Agenten gleichzeitig `llm()` rufen.
+
 ## Notebook neu bauen
 
 Inhalt liegt editierbar in `notebook_source.txt` (Zell-Marker `<<<MD>>>` / `<<<CODE>>>`).
