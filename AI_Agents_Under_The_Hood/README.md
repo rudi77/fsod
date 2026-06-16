@@ -81,7 +81,7 @@ Notebook 2 startet die Infrastruktur **deklarativ** — kein Prozess-Management 
 
 | Datei | Rolle |
 |---|---|
-| `docker-compose.yml` | startet `demo-mcp` (unser Server) + `litellm` (Gateway) in einem Netz |
+| `docker-compose.yml` | startet `demo-mcp` (unser Server) + `litellm` (Gateway) + `db` (Postgres) in einem Netz |
 | `Dockerfile.mcp` | Mini-Image: Python + `mcp`-SDK + Server-Dateien |
 | `litellm_config.yaml` | registriert den Demo-Server als Upstream (`http://demo-mcp:8000/mcp`), setzt den `master_key` |
 | `mcp_http_server.py` | exponiert dieselben Tools über streamable-http |
@@ -91,11 +91,13 @@ Im Compose-Netz erreicht LiteLLM den Demo-Server über den **Service-Namen** `de
 Die Zellen in Notebook 2 rufen die Compose-Befehle selbst auf; von Hand geht es so:
 
 ```powershell
-docker compose up -d --build     # demo-mcp + litellm hochfahren (erster Start baut/zieht Images)
+docker compose up -d --build     # db + demo-mcp + litellm hochfahren (erster Start baut/zieht Images)
 docker compose ps                # Status
 # ... Notebook 2 ausführen: verbindet auf http://localhost:4000/mcp ...
-docker compose down              # beide Container stoppen + entfernen, :4000 freigeben
+docker compose down              # alle Container stoppen + entfernen, :4000 freigeben
 ```
+
+**Admin-UI (optional):** http://localhost:4000/ui — Login `admin` / `sk-1234`. Dafür ist der `db`-Service (Postgres) da: Die UI speichert User/Keys/Logs in der DB (sonst `Not connected to DB!` beim Login). Für den reinen MCP-Tool-Zugriff über `x-litellm-api-key` braucht man die UI **nicht** — `db` ist nur fürs UI/Key-Management nötig.
 
 > 🪟 **Windows/Jupyter:** Beide Notebooks führen die MCP-Aufrufe in einem eigenen Thread mit `ProactorEventLoop` aus (`run_async`) — nötig, damit Subprozesse/Streams unabhängig von Jupyters Event-Loop laufen.
 

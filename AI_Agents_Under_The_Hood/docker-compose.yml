@@ -1,15 +1,31 @@
 # MCP-Gateway-Infrastruktur fuer das Notebook AI_Agents_MCP_Gateway.ipynb.
 #
-# Zwei Services in einem Netz:
+# Drei Services in einem Netz:
+#   db       : Postgres - NUR fuer die LiteLLM-Admin-UI noetig (User/Keys/Logs)
 #   demo-mcp : unser Demo-Server (current_time, add, search_kb) ueber streamable-http
 #   litellm  : der LiteLLM-Proxy als MCP-Gateway, erreichbar auf http://localhost:4000
 #
 # LiteLLM spricht den Demo-Server ueber den Service-Namen 'demo-mcp' an (siehe
 # litellm_config.yaml) - deshalb braucht der Demo-Server kein Port-Mapping zum Host.
 #
-# Starten:  docker compose up -d --build      Stoppen:  docker compose down
+# Admin-UI:  http://localhost:4000/ui   (Login: admin / sk-1234)
+# Starten:   docker compose up -d --build      Stoppen:  docker compose down
 
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: litellm
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: litellm
+    volumes:
+      - litellm_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm -d litellm"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
   demo-mcp:
     build:
       context: .
@@ -17,11 +33,27 @@ services:
     # Kein "ports:" noetig - nur LiteLLM (im selben Netz) spricht mit diesem Service.
 
   litellm:
-    image: ghcr.io/berriai/litellm:main-latest
+    # DB-Variante des Images: fuehrt beim Start die noetigen Prisma-Migrationen aus.
+    image: ghcr.io/berriai/litellm-database:main-latest
     ports:
       - "4000:4000"                       # nur das Gateway ist vom Host (Notebook) aus erreichbar
     volumes:
       - ./litellm_config.yaml:/app/config.yaml:ro
+    environment:
+      # Verbindung zur DB (aktiviert Admin-UI, Keys, Logging).
+      DATABASE_URL: "postgresql://litellm:litellm@db:5432/litellm"
+      # Master-Key = zugleich Admin-Login der UI. Muss zum master_key in der config passen.
+      LITELLM_MASTER_KEY: "sk-1234"
+      # Explizite UI-Credentials (sonst: admin / <master_key>).
+      UI_USERNAME: "admin"
+      UI_PASSWORD: "sk-1234"
+      STORE_MODEL_IN_DB: "true"
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     depends_on:
-      - demo-mcp
+      db:
+        condition: service_healthy
+      demo-mcp:
+        condition: service_started
+
+volumes:
+  litellm_pgdata:
