@@ -1,0 +1,473 @@
+<<<MD>>>
+# 🤖 AI Agents under the Hood
+
+**Ein Agent *from scratch* — Schritt für Schritt im Notebook.**
+
+Kernbotschaft des Vortrags:
+
+> Ein **LLM** ist nur *Text rein → Text raus*. Es hat kein Gedächtnis, keine Hände, keine Schleife.
+> Ein **Agent** ist alles, was wir *drumherum* bauen: Memory, Tools, Loop, Context-Management und ein Harness, das das Ganze stabil hält.
+
+Wir lassen **denselben Loop** kapitelweise wachsen — am Ende steht ein lauffähiger **Coding-Agent**, der Code schreibt, ausführt, testet und committet.
+
+| Kapitel | Frage | Zutat |
+|---|---|---|
+| 1 | Was *ist* ein LLM? | `chat()` |
+| 2 | Warum „vergisst" es? | `messages[]` (Memory) |
+| 3 | Wie bekommt es Hände? | Tool-Calling |
+| 4 | Was ist *der* Agent? | Agentic Loop |
+| 5 | Was heißt „Denken / Planen"? | ReAct & Planning |
+| 6 | Echte Coding-Fähigkeiten | write / run / test (Sandbox) |
+| 7 | Was steht im Kontextfenster? | Context Engineering |
+| 8 | Was hält das stabil? | Harness Engineering |
+| 9 | Wie teilt man Tools? | MCP |
+| 10 | Alles zusammen | Coding-Agent Finale |
+<<<MD>>>
+## 0 · Setup
+
+Konfiguration kommt komplett aus der `.env` (Vorlage: `.env.example`). Einmalig `pip install -r requirements.txt`.
+<<<CODE>>>
+import os, json, subprocess
+from pathlib import Path
+from openai import AzureOpenAI
+from dotenv import load_dotenv
+
+load_dotenv()  # liest die .env
+
+client = AzureOpenAI(
+    api_key=os.environ["AZURE_OPENAI_API_KEY"],
+    api_version=os.environ.get("AZURE_OPENAI_API_VERSION", "2024-10-21"),
+    azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
+)
+DEPLOYMENT = os.environ["AZURE_OPENAI_DEPLOYMENT"]
+
+def llm(messages, tools=None, tool_choice="auto"):
+    """Ein einziger Call zum Modell. Das ist ALLES, was ein LLM kann:
+    Nachrichten rein -> eine Antwort raus. (Kein State, keine Tools von selbst.)"""
+    kwargs = dict(model=DEPLOYMENT, messages=messages)
+    if tools:
+        kwargs["tools"] = tools
+        kwargs["tool_choice"] = tool_choice
+    return client.chat.completions.create(**kwargs)
+
+print("Client bereit. Deployment:", DEPLOYMENT)
+<<<MD>>>
+## 1 · Das nackte LLM — Text rein, Text raus
+
+Ein LLM ist *stateless*. Es kennt nur die Nachrichten, die wir ihm **in genau diesem einen Call** mitgeben. Kein Zugriff auf Dateisystem, Netz oder Uhr. Fragen wir nach etwas, das es nicht wissen kann, **rät es** (Halluzination).
+<<<CODE>>>
+resp = llm([
+    {"role": "user", "content": "Liste die Dateien im aktuellen Verzeichnis auf."}
+])
+print(resp.choices[0].message.content)
+<<<MD>>>
+👉 Das Modell *kann* keine Dateien sehen — es erfindet eine plausible Antwort oder sagt nur, dass es das nicht kann. **Kein Gedächtnis, keine Hände.** Genau hier setzen wir an.
+<<<MD>>>
+## 2 · Gedächtnis — die Konversation sind WIR
+
+Das Modell merkt sich nichts zwischen zwei Calls. „Gedächtnis" heißt: *wir* hängen jede Nachricht an eine Liste `messages` an und schicken die **ganze Historie** bei jedem Call erneut mit.
+<<<CODE>>>
+# Ohne Historie: das Modell weiß im 2. Call nichts vom 1.
+print("— Ohne Memory —")
+print(llm([{"role": "user", "content": "Wie heiße ich?"}]).choices[0].message.content)
+
+# Mit Historie: wir tragen den Kontext selbst zusammen.
+print("\n— Mit Memory —")
+messages = [
+    {"role": "user", "content": "Ich heiße Rudi."},
+    {"role": "assistant", "content": "Hallo Rudi!"},
+    {"role": "user", "content": "Wie heiße ich?"},
+]
+print(llm(messages).choices[0].message.content)
+<<<MD>>>
+## 3 · Tools — dem Modell Hände geben
+
+Ein **Tool** ist eine ganz normale Python-Funktion. Dem Modell beschreiben wir sie als **JSON-Schema** (Name, Zweck, Parameter). Wichtig:
+
+- Das Modell **führt nichts aus**. Es kann nur *sagen*: „Bitte ruf `list_files(path='.')` auf."
+- Diese Aufforderung kommt als strukturierter **`tool_call`** zurück — nicht als Fließtext.
+- **Wir** führen die Funktion aus und liefern das Ergebnis als neue Nachricht (`role: "tool"`) zurück.
+<<<CODE>>>
+def list_files(path="."):
+    return "\n".join(sorted(os.listdir(path)))
+
+list_files_schema = {
+    "type": "function",
+    "function": {
+        "name": "list_files",
+        "description": "Listet die Dateien in einem Verzeichnis auf.",
+        "parameters": {
+            "type": "object",
+            "properties": {"path": {"type": "string", "description": "Pfad, Default '.'"}},
+            "required": [],
+        },
+    },
+}
+
+resp = llm(
+    [{"role": "user", "content": "Welche Dateien liegen im aktuellen Verzeichnis?"}],
+    tools=[list_files_schema],
+)
+msg = resp.choices[0].message
+print("content   :", msg.content)
+print("tool_calls:", msg.tool_calls)
+<<<MD>>>
+👉 `content` ist leer — stattdessen steht in `tool_calls`, **welche Funktion** das Modell mit **welchen Argumenten** aufgerufen haben will. Jetzt führen *wir* aus und geben das Ergebnis zurück:
+<<<CODE>>>
+messages = [{"role": "user", "content": "Welche Dateien liegen im aktuellen Verzeichnis?"}]
+
+# Runde 1: Modell fordert das Tool an
+resp = llm(messages, tools=[list_files_schema])
+msg = resp.choices[0].message
+tc = msg.tool_calls[0]
+args = json.loads(tc.function.arguments or "{}")
+result = list_files(**args)
+print("Tool-Ergebnis:\n", result)
+
+# Assistant-Nachricht (mit tool_call) + Tool-Ergebnis an die Historie hängen
+messages.append({
+    "role": "assistant", "content": msg.content,
+    "tool_calls": [{"id": tc.id, "type": "function",
+                    "function": {"name": tc.function.name, "arguments": tc.function.arguments}}],
+})
+messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
+
+# Runde 2: Modell formuliert die finale Antwort aus dem Tool-Ergebnis
+final = llm(messages, tools=[list_files_schema])
+print("\nFinale Antwort:\n", final.choices[0].message.content)
+<<<MD>>>
+## 4 · Der Agentic Loop — *das* ist der Agent
+
+Oben haben wir die Runden von Hand gemacht. Ein Agent automatisiert genau das in einer **Schleife**:
+
+```
+solange das Modell ein Tool aufruft:
+    Tool ausführen  ->  Ergebnis anhängen  ->  Modell erneut fragen
+sonst:
+    fertige Antwort zurückgeben
+```
+
+Mehr ist es im Kern nicht. Wir bauen ein kleines **Tool-Registry** und den Loop drumherum.
+<<<CODE>>>
+# --- Tool-Registry: Schema + Funktion an einer Stelle ---
+TOOLS = []        # JSON-Schemas fürs Modell
+DISPATCH = {}     # name -> Python-Funktion
+
+def register(name, description, parameters):
+    def deco(fn):
+        TOOLS.append({"type": "function", "function": {
+            "name": name, "description": description, "parameters": parameters}})
+        DISPATCH[name] = fn
+        return fn
+    return deco
+
+@register("list_files", "Listet Dateien in einem Verzeichnis.",
+          {"type": "object", "properties": {"path": {"type": "string"}}, "required": []})
+def _list_files(path="."):
+    return "\n".join(sorted(os.listdir(path)))
+
+
+def to_assistant_dict(msg):
+    """OpenAI-Antwortobjekt -> serialisierbares Dict für die Historie."""
+    d = {"role": "assistant", "content": msg.content}
+    if msg.tool_calls:
+        d["tool_calls"] = [{"id": tc.id, "type": "function",
+                            "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
+                           for tc in msg.tool_calls]
+    return d
+
+
+def run_agent(task, system=None, max_steps=10, verbose=True):
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": task})
+
+    for step in range(1, max_steps + 1):
+        msg = llm(messages, tools=TOOLS or None).choices[0].message
+        messages.append(to_assistant_dict(msg))
+
+        if not msg.tool_calls:                       # keine Tools mehr -> fertig
+            if verbose: print(f"[Schritt {step}] ✓ finale Antwort")
+            return msg.content, messages
+
+        for tc in msg.tool_calls:                    # alle angeforderten Tools ausführen
+            args = json.loads(tc.function.arguments or "{}")
+            if verbose: print(f"[Schritt {step}] → {tc.function.name}({args})")
+            try:
+                result = DISPATCH[tc.function.name](**args)
+            except Exception as e:
+                result = f"ERROR: {e}"
+            messages.append({"role": "tool", "tool_call_id": tc.id, "content": str(result)})
+
+    return "(max_steps erreicht)", messages
+
+
+answer, _ = run_agent("Wie viele Dateien liegen im aktuellen Verzeichnis, und wie heißen sie?")
+print("\n", answer)
+<<<MD>>>
+## 5 · ReAct & Planning — was „Denken" wirklich heißt
+
+**ReAct** = *Reasoning + Acting* verschränkt: Das Modell *begründet* kurz, *handelt* (Tool), *beobachtet* das Ergebnis, begründet erneut … bis das Ziel erreicht ist. „Denken" ist dabei nichts Magisches — es sind **Tokens, die das Modell vor der nächsten Aktion erzeugt** und die seine Folge-Entscheidung steuern.
+
+Gesteuert wird das über den **System-Prompt**. Zwei gängige Patterns:
+- **ReAct** (reaktiv, schrittweise): denke → handle → beobachte → wiederhole.
+- **Plan-and-Execute**: erst einen Plan erstellen, dann abarbeiten.
+<<<CODE>>>
+REACT_SYSTEM = (
+    "Du bist ein hilfreicher Agent. Arbeite in kleinen Schritten nach dem ReAct-Muster: "
+    "Überlege kurz, was der nächste sinnvolle Schritt ist, rufe dann ein Tool auf, "
+    "und nutze dessen Ergebnis für den nächsten Schritt. Wenn du genug weißt, antworte final."
+)
+
+@register("read_file", "Liest den Textinhalt einer Datei (erste 2000 Zeichen).",
+          {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]})
+def _read_file(path):
+    return Path(path).read_text(encoding="utf-8", errors="replace")[:2000]
+
+answer, _ = run_agent(
+    "Finde im aktuellen Verzeichnis die requirements.txt und sage mir, welche Pakete darin stehen.",
+    system=REACT_SYSTEM,
+)
+print("\n", answer)
+<<<MD>>>
+### Planning sichtbar machen
+Bei **Plan-and-Execute** lassen wir das Modell zuerst einen Plan formulieren. In echten Agents (z. B. Claude Code) ist das eine **Todo-Liste**, die mitgeführt und abgehakt wird. Minimal genügt ein anderer System-Prompt:
+<<<CODE>>>
+PLAN_SYSTEM = (
+    "Du bist ein Agent. Erstelle ZUERST einen nummerierten Plan (1., 2., 3.) für die Aufgabe. "
+    "Arbeite den Plan dann Schritt für Schritt mit Tools ab und nenne am Ende das Ergebnis."
+)
+answer, _ = run_agent(
+    "Lies die Dateien requirements.txt und .env.example und erkläre in zwei Sätzen, "
+    "was man zum Start dieses Projekts braucht.",
+    system=PLAN_SYSTEM,
+)
+print("\n", answer)
+<<<MD>>>
+## 6 · Coding-Tools — Sandbox & Approval
+
+Jetzt geben wir dem Agenten echte Coding-Fähigkeiten: **Dateien schreiben**, **Shell/Code ausführen**, **Tests laufen lassen**. Dazu zwei Sicherheitsnetze:
+
+1. **Sandbox**: Alles passiert im Unterordner `./agent_workspace`. Schreib-/Lese-Pfade werden darauf eingesperrt.
+2. **Approval**: Vor jeder Shell-Ausführung fragt der Agent per `input()` um Erlaubnis (`j/N`).
+<<<CODE>>>
+WORKSPACE = Path("./agent_workspace").resolve()
+WORKSPACE.mkdir(exist_ok=True)
+APPROVAL = True   # auf False setzen -> ohne Rückfrage (schnellere Demo)
+
+def _safe(path):
+    """Sperrt Pfade in die Sandbox ein."""
+    p = (WORKSPACE / path).resolve()
+    if not str(p).startswith(str(WORKSPACE)):
+        raise ValueError(f"Pfad außerhalb der Sandbox: {path}")
+    return p
+
+@register("write_file", "Schreibt Text in eine Datei (innerhalb der Sandbox).",
+          {"type": "object", "properties": {
+              "path": {"type": "string"}, "content": {"type": "string"}},
+           "required": ["path", "content"]})
+def _write_file(path, content):
+    p = _safe(path); p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(content, encoding="utf-8")
+    return f"{len(content)} Zeichen nach {path} geschrieben."
+
+@register("read_ws_file", "Liest eine Datei aus der Sandbox.",
+          {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]})
+def _read_ws_file(path):
+    return _safe(path).read_text(encoding="utf-8", errors="replace")
+
+@register("run_shell", "Führt einen PowerShell-Befehl in der Sandbox aus (stdout/stderr zurück).",
+          {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]})
+def _run_shell(command):
+    if APPROVAL:
+        ans = input(f"\n⚠️  Shell ausführen?\n  {command}\n[j/N] ")
+        if ans.strip().lower() not in ("j", "ja", "y", "yes"):
+            return "ABGELEHNT vom Benutzer."
+    r = subprocess.run(["powershell", "-NoProfile", "-Command", command],
+                       cwd=WORKSPACE, capture_output=True, text=True, timeout=120)
+    out = f"exit={r.returncode}\n--- STDOUT ---\n{r.stdout}\n--- STDERR ---\n{r.stderr}"
+    return out[:4000]
+
+print("Sandbox:", WORKSPACE)
+print("Registrierte Tools:", list(DISPATCH))
+<<<MD>>>
+## 7 · Context Engineering — was ins Fenster passt
+
+Das Modell sieht bei jedem Call nur das **Kontextfenster**: System-Prompt + komplette Message-Historie + Tool-Ergebnisse. Das ist endlich (Tokens kosten Geld & Zeit, und irgendwann ist das Fenster voll). **Context Engineering** = bewusst entscheiden, *was* drinsteht.
+
+Drei Hebel, die wir zeigen:
+- **Token-Budget messen** — wie voll ist das Fenster?
+- **Tool-Ergebnisse kürzen** (truncation) — riesige Outputs nicht ungefiltert anhängen.
+- **Compaction** — alte Historie zusammenfassen, statt sie komplett mitzuschleppen.
+<<<CODE>>>
+try:
+    import tiktoken
+    _enc = tiktoken.get_encoding("o200k_base")
+    def count_tokens(messages):
+        return sum(len(_enc.encode(str(m.get("content") or ""))) for m in messages)
+except Exception:
+    def count_tokens(messages):                      # Fallback: grobe Schätzung
+        return sum(len(str(m.get("content") or "")) for m in messages) // 4
+
+def truncate(text, limit=2000):
+    return text if len(text) <= limit else text[:limit] + f"\n…[{len(text)-limit} Zeichen gekürzt]"
+
+def compact(messages, keep_last=4):
+    """Fasst alte Nachrichten zu einer kurzen Notiz zusammen; behält die letzten paar im Original."""
+    if len(messages) <= keep_last + 1:
+        return messages
+    head, tail = messages[:-keep_last], messages[-keep_last:]
+    summary = llm([{"role": "user",
+        "content": "Fasse den folgenden Verlauf in 3 Stichpunkten zusammen:\n" +
+                   json.dumps([{k: m.get(k) for k in ("role", "content")} for m in head], ensure_ascii=False)}]
+    ).choices[0].message.content
+    return [{"role": "system", "content": "Bisheriger Verlauf (komprimiert):\n" + summary}] + tail
+
+# Demo: Tokens vor/nach Compaction
+demo = [{"role": "user", "content": "Lang lang lang " * 200} for _ in range(6)]
+print("vorher :", count_tokens(demo), "Tokens,", len(demo), "Nachrichten")
+small = compact(demo)
+print("nachher:", count_tokens(small), "Tokens,", len(small), "Nachrichten")
+<<<MD>>>
+## 8 · Harness Engineering — was den Agenten stabil hält
+
+Das **Harness** ist alles um das Modell herum, das aus einem unzuverlässigen Text-Generator ein robustes Werkzeug macht — genau das, was z. B. Claude Code ausmacht:
+
+- **`max_steps`** gegen Endlosschleifen
+- **Fehler abfangen** und als Tool-Ergebnis zurückgeben (das Modell kann sich korrigieren)
+- **Approval / Permissions** vor riskanten Aktionen
+- **Truncation & Compaction** (Kapitel 7) im Loop
+- **Tracing / Logging**, damit man sieht, was passiert
+- **Retries** bei transienten API-Fehlern
+
+Wir gießen das in einen aufgebohrten Loop `run_agent_v2`.
+<<<CODE>>>
+def run_agent_v2(task, system=None, max_steps=12, token_budget=6000, on_event=print):
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": task})
+
+    for step in range(1, max_steps + 1):
+        # Harness: Kontext klein halten
+        if count_tokens(messages) > token_budget:
+            messages = compact(messages)
+            on_event(f"[harness] Kontext komprimiert -> {count_tokens(messages)} Tokens")
+
+        # Harness: Retry bei transienten API-Fehlern
+        for attempt in range(3):
+            try:
+                msg = llm(messages, tools=TOOLS or None).choices[0].message
+                break
+            except Exception as e:
+                on_event(f"[harness] API-Fehler ({attempt+1}/3): {e}")
+                if attempt == 2:
+                    raise
+
+        messages.append(to_assistant_dict(msg))
+        if not msg.tool_calls:
+            on_event(f"[schritt {step}] ✓ fertig")
+            return msg.content, messages
+
+        for tc in msg.tool_calls:
+            args = json.loads(tc.function.arguments or "{}")
+            on_event(f"[schritt {step}] → {tc.function.name}({truncate(json.dumps(args, ensure_ascii=False), 120)})")
+            try:
+                result = str(DISPATCH[tc.function.name](**args))
+            except Exception as e:
+                result = f"ERROR: {e}"          # Fehler ist auch ein Ergebnis -> Selbstkorrektur
+            messages.append({"role": "tool", "tool_call_id": tc.id, "content": truncate(result)})
+
+    return "(max_steps erreicht)", messages
+
+print("run_agent_v2 bereit.")
+<<<MD>>>
+## 9 · MCP — Tools als Standard-Protokoll
+
+Bisher haben wir jedes Tool selbst als Python-Funktion + Schema definiert. Das skaliert schlecht: Jeder Anbieter (GitHub, DB, Filesystem, Jira …) müsste sein eigenes Format mitbringen.
+
+**MCP (Model Context Protocol)** standardisiert das: Ein **MCP-Server** stellt über ein einheitliches Protokoll (JSON-RPC) **Tools, Resources und Prompts** bereit. Der Agent (**MCP-Client**) fragt „welche Tools hast du?", bekommt die Schemas und ruft sie auf — **exakt derselbe Loop wie oben**, nur kommen Schema & Ausführung jetzt vom Server.
+
+```
+Agent (MCP-Client)  <->  MCP-Server (z. B. Filesystem, GitHub, Postgres)
+        |  list_tools          ->
+        |               <-  [Schemas]
+        |  call_tool(name,args) ->
+        |               <-  Ergebnis
+```
+
+Wir zeigen das mit einem **Mini-Stub**, der einen MCP-Server nachstellt und seine Tools in unsere Registry einklinkt.
+<<<CODE>>>
+# Stark vereinfachter "MCP-Server": liefert Tool-Schemas + führt sie aus.
+class FakeMCPServer:
+    def list_tools(self):
+        return [{
+            "name": "mcp_echo",
+            "description": "Gibt den übergebenen Text in Großbuchstaben zurück (Demo-MCP-Tool).",
+            "parameters": {"type": "object", "properties": {"text": {"type": "string"}},
+                           "required": ["text"]},
+        }]
+    def call_tool(self, name, args):
+        if name == "mcp_echo":
+            return args["text"].upper()
+        raise ValueError(f"Unbekanntes MCP-Tool: {name}")
+
+def mount_mcp(server):
+    """Klinkt die Tools eines MCP-Servers in unsere bestehende Registry ein."""
+    for t in server.list_tools():
+        TOOLS.append({"type": "function", "function": t})
+        DISPATCH[t["name"]] = (lambda n: (lambda **kw: server.call_tool(n, kw)))(t["name"])
+        print("MCP-Tool eingebunden:", t["name"])
+
+mount_mcp(FakeMCPServer())
+answer, _ = run_agent_v2("Nutze das MCP-Echo-Tool, um 'agents under the hood' in Großbuchstaben auszugeben.")
+print("\n", answer)
+<<<MD>>>
+## 10 · Finale — Der Coding-Agent
+
+Jetzt steckt alles zusammen: **derselbe Loop**, plus Coding-Tools, Sandbox, Approval und Harness. Wir geben eine echte Aufgabe und lassen den Agenten **schreiben → ausführen → testen**.
+
+> ⚠️ Beim Lauf erscheinen `input()`-Approval-Fragen (`j/N`) für jeden Shell-Befehl. Für eine schnellere Demo `APPROVAL = False` setzen.
+<<<CODE>>>
+CODING_SYSTEM = (
+    "Du bist ein Coding-Agent und arbeitest ausschließlich in der Sandbox. "
+    "Schreibe Code mit write_file, führe ihn mit run_shell (z. B. 'python ...') aus und teste mit pytest. "
+    "Wenn ein Test fehlschlägt, lies die Fehlermeldung, korrigiere den Code und versuche es erneut. "
+    "Erkläre am Ende kurz, was du gebaut hast."
+)
+
+task = (
+    "Erstelle fizzbuzz.py mit einer Funktion fizzbuzz(n), die für die Zahlen 1..n die FizzBuzz-Regeln "
+    "als Liste von Strings zurückgibt. Schreibe dazu test_fizzbuzz.py mit pytest-Tests "
+    "(prüfe: 3 -> 'Fizz', 5 -> 'Buzz', 15 -> 'FizzBuzz', 1 -> '1'). "
+    "Führe danach 'python -m pytest -q' aus, bis alle Tests grün sind."
+)
+
+answer, history = run_agent_v2(task, system=CODING_SYSTEM, max_steps=15)
+print("\n=== Ergebnis ===\n", answer)
+<<<MD>>>
+### Mit git committen (commit live, push auskommentiert)
+Der Agent kann auch versionieren. `commit` ist sicher; `push` braucht Remote + Auth und ist live riskant — daher bewusst auskommentiert.
+<<<CODE>>>
+git_task = (
+    "Initialisiere ein git-Repository in der Sandbox (falls noch nicht vorhanden), "
+    "konfiguriere user.name='Demo Agent' und user.email='agent@example.com' lokal, "
+    "füge alle Dateien hinzu und committe sie mit der Nachricht 'FizzBuzz vom Agent'. "
+    "Zeige am Ende 'git log --oneline'."
+    # "Pushe anschließend nach origin main."   # <- push bewusst auskommentiert (braucht Remote + Auth)
+)
+answer, _ = run_agent_v2(git_task, system=CODING_SYSTEM, max_steps=12)
+print("\n", answer)
+<<<MD>>>
+## Wrap-up — 3 Dinge zum Mitnehmen
+
+1. **Ein Agent ist ein LLM in einer Schleife mit Tools.** Der Loop selbst ist ~20 Zeilen Code — den Rest macht das Modell.
+2. **Die Kunst liegt im Drumherum:** *Context Engineering* (was sieht das Modell?) und *Harness Engineering* (was hält es stabil & sicher?) entscheiden über die Qualität.
+3. **Tools sind nur Funktionen + Schema. MCP** standardisiert ihre Bereitstellung — derselbe Loop, mehr Reichweite.
+
+### Übungen fürs Publikum
+- Ein neues Tool registrieren (z. B. `http_get`) und im Loop nutzen.
+- `APPROVAL` / `max_steps` / `token_budget` variieren und das Verhalten beobachten.
+- Plan-and-Execute vs. ReAct an derselben Aufgabe vergleichen.
+<<<END>>>

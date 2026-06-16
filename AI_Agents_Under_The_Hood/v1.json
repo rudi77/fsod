@@ -1,0 +1,865 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "Ctxman.Api | v1",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5291/"
+    }
+  ],
+  "paths": {
+    "/healthz": {
+      "get": {
+        "tags": [
+          "Ctxman.Api"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/v1/sessions": {
+      "post": {
+        "tags": [
+          "SessionEndpoints"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "SessionEndpoints"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/v1/sessions/events": {
+      "get": {
+        "tags": [
+          "SessionEndpoints"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/v1/sessions/{sid}": {
+      "get": {
+        "tags": [
+          "SessionEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/v1/sessions/{sid}/archive": {
+      "post": {
+        "tags": [
+          "SessionEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/v1/sessions/{sid}/segments": {
+      "post": {
+        "tags": [
+          "SegmentEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppendSegmentsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/v1/sessions/{sid}/segments/{segid}/pin": {
+      "post": {
+        "tags": [
+          "SegmentEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "segid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "SegmentEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "segid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/v1/sessions/{sid}/blobs": {
+      "post": {
+        "tags": [
+          "BlobEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/v1/sessions/{sid}/render": {
+      "post": {
+        "tags": [
+          "RenderEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/v1/sessions/{sid}/static-segments": {
+      "put": {
+        "tags": [
+          "RenderEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceStaticSegmentsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/v1/sessions/{sid}/gc": {
+      "post": {
+        "tags": [
+          "GcEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GcRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/v1/sessions/{sid}/refs/{segment_id}": {
+      "get": {
+        "tags": [
+          "RefEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "segment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/v1/sessions/{sid}/events": {
+      "get": {
+        "tags": [
+          "EventEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "after_seq",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "stream",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/v1/sessions/{sid}/frames": {
+      "post": {
+        "tags": [
+          "FrameEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushFrameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/v1/sessions/{sid}/frames/{fid}": {
+      "delete": {
+        "tags": [
+          "FrameEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PopFrameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AppendSegmentDto": {
+        "required": [
+          "kind",
+          "role",
+          "content",
+          "blob_ref",
+          "tool_call_id",
+          "pinned",
+          "source",
+          "region"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "nullable": true
+          },
+          "role": {
+            "type": "string",
+            "nullable": true
+          },
+          "content": {
+            "type": "string",
+            "nullable": true
+          },
+          "blob_ref": {
+            "$ref": "#/components/schemas/BlobRefDto"
+          },
+          "tool_call_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "pinned": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "source": {
+            "type": "string",
+            "nullable": true
+          },
+          "region": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "AppendSegmentsRequest": {
+        "required": [
+          "segments",
+          "kind",
+          "role",
+          "content",
+          "blob_ref",
+          "tool_call_id",
+          "pinned",
+          "source",
+          "region"
+        ],
+        "type": "object",
+        "properties": {
+          "segments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppendSegmentDto"
+            },
+            "nullable": true
+          },
+          "kind": {
+            "type": "string",
+            "nullable": true
+          },
+          "role": {
+            "type": "string",
+            "nullable": true
+          },
+          "content": {
+            "type": "string",
+            "nullable": true
+          },
+          "blob_ref": {
+            "$ref": "#/components/schemas/BlobRefDto"
+          },
+          "tool_call_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "pinned": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "source": {
+            "type": "string",
+            "nullable": true
+          },
+          "region": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "BlobRefDto": {
+        "required": [
+          "store",
+          "key",
+          "size_bytes",
+          "content_type"
+        ],
+        "type": "object",
+        "properties": {
+          "store": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "content_type": {
+            "type": "string"
+          }
+        },
+        "nullable": true
+      },
+      "CompactionDto": {
+        "required": [
+          "model",
+          "prompt_template_id",
+          "max_share"
+        ],
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string",
+            "nullable": true
+          },
+          "prompt_template_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "max_share": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
+      "CreateSessionRequest": {
+        "required": [
+          "agent_template_id",
+          "policy_overrides",
+          "static_segments"
+        ],
+        "type": "object",
+        "properties": {
+          "agent_template_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "policy_overrides": {
+            "$ref": "#/components/schemas/PolicyOverridesDto"
+          },
+          "static_segments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StaticSegmentDto"
+            },
+            "nullable": true
+          }
+        }
+      },
+      "GcRequest": {
+        "required": [
+          "level"
+        ],
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "PolicyOverridesDto": {
+        "required": [
+          "budget_tokens",
+          "watermarks",
+          "externalize_threshold_tokens",
+          "tokenizer",
+          "on_tool_removed",
+          "compaction",
+          "promotion"
+        ],
+        "type": "object",
+        "properties": {
+          "budget_tokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "watermarks": {
+            "$ref": "#/components/schemas/WatermarksDto"
+          },
+          "externalize_threshold_tokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "tokenizer": {
+            "type": "string",
+            "nullable": true
+          },
+          "on_tool_removed": {
+            "type": "string",
+            "nullable": true
+          },
+          "compaction": {
+            "$ref": "#/components/schemas/CompactionDto"
+          },
+          "promotion": {
+            "$ref": "#/components/schemas/PromotionDto"
+          }
+        },
+        "nullable": true
+      },
+      "PopFrameRequest": {
+        "required": [
+          "return_content",
+          "return_kind"
+        ],
+        "type": "object",
+        "properties": {
+          "return_content": {
+            "type": "string"
+          },
+          "return_kind": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "PromotionDto": {
+        "required": [
+          "sink"
+        ],
+        "type": "object",
+        "properties": {
+          "sink": {
+            "$ref": "#/components/schemas/PromotionSinkDto"
+          }
+        },
+        "nullable": true
+      },
+      "PromotionSinkDto": {
+        "required": [
+          "type",
+          "url"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "url": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
+      "PushFrameRequest": {
+        "required": [
+          "label"
+        ],
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "RenderRequest": {
+        "required": [
+          "provider",
+          "scope",
+          "turn_advance"
+        ],
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string",
+            "nullable": true
+          },
+          "turn_advance": {
+            "type": "boolean",
+            "nullable": true
+          }
+        }
+      },
+      "ReplaceStaticSegmentsRequest": {
+        "required": [
+          "segments"
+        ],
+        "type": "object",
+        "properties": {
+          "segments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StaticSegmentDto"
+            }
+          }
+        }
+      },
+      "StaticSegmentDto": {
+        "required": [
+          "kind",
+          "role",
+          "content",
+          "source"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "nullable": true
+          },
+          "content": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "WatermarksDto": {
+        "required": [
+          "soft",
+          "hard",
+          "emergency"
+        ],
+        "type": "object",
+        "properties": {
+          "soft": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "hard": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "emergency": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          }
+        },
+        "nullable": true
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Ctxman.Api"
+    },
+    {
+      "name": "SessionEndpoints"
+    },
+    {
+      "name": "SegmentEndpoints"
+    },
+    {
+      "name": "BlobEndpoints"
+    },
+    {
+      "name": "RenderEndpoints"
+    },
+    {
+      "name": "GcEndpoints"
+    },
+    {
+      "name": "RefEndpoints"
+    },
+    {
+      "name": "EventEndpoints"
+    },
+    {
+      "name": "FrameEndpoints"
+    }
+  ]
+}

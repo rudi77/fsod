@@ -1,0 +1,6 @@
+.env
+.venv/
+agent_workspace/
+__pycache__/
+.ipynb_checkpoints/
+*.pyc
