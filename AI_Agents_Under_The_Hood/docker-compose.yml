@@ -8,6 +8,11 @@
 # LiteLLM spricht den Demo-Server ueber den Service-Namen 'demo-mcp' an (siehe
 # litellm_config.yaml) - deshalb braucht der Demo-Server kein Port-Mapping zum Host.
 #
+# Der Microsoft-365-Server (ms365) laeuft NICHT als eigener Service, sondern wird
+# von LiteLLM als stdio-Subprozess gestartet (siehe litellm_config.yaml). Dafuer
+# enthaelt das LiteLLM-Image Node (Dockerfile.litellm). Der Login-Token wird im
+# Named Volume 'ms365_token' gehalten, damit der Device-Code-Login Neustarts ueberlebt.
+#
 # Admin-UI:  http://localhost:4000/ui   (Login: admin / sk-1234)
 # Starten:   docker compose up -d --build      Stoppen:  docker compose down
 
@@ -33,12 +38,15 @@ services:
     # Kein "ports:" noetig - nur LiteLLM (im selben Netz) spricht mit diesem Service.
 
   litellm:
-    # DB-Variante des Images: fuehrt beim Start die noetigen Prisma-Migrationen aus.
-    image: ghcr.io/berriai/litellm-database:main-latest
+    # LiteLLM (DB-Variante: Admin-UI/Prisma) + Node, um stdio-MCP-Server zu starten.
+    build:
+      context: .
+      dockerfile: Dockerfile.litellm
     ports:
       - "4000:4000"                       # nur das Gateway ist vom Host (Notebook) aus erreichbar
     volumes:
       - ./litellm_config.yaml:/app/config.yaml:ro
+      - ms365_token:/data/ms365           # persistenter Token-Cache fuer den ms365-Login
     environment:
       # Verbindung zur DB (aktiviert Admin-UI, Keys, Logging).
       DATABASE_URL: "postgresql://litellm:litellm@db:5432/litellm"
@@ -48,6 +56,9 @@ services:
       UI_USERNAME: "admin"
       UI_PASSWORD: "sk-1234"
       STORE_MODEL_IN_DB: "true"
+      # LiteLLM erlaubt stdio-MCP-Server nur aus einer Allowlist (node/npx/python/...).
+      # Unser global installierter ms-365-Server muss explizit freigeschaltet werden.
+      LITELLM_MCP_STDIO_EXTRA_COMMANDS: "ms-365-mcp-server"
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     depends_on:
       db:
@@ -57,3 +68,4 @@ services:
 
 volumes:
   litellm_pgdata:
+  ms365_token:

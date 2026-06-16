@@ -11,5 +11,22 @@ mcp_servers:
     transport: "http"                 # streamable-http (MCP SDK)
     description: "Demo-Knowledge-Server: current_time, add, search_kb"
 
+  ms365:                # <- Tools heissen ms365-* (z. B. ms365-list-mail-messages)
+    transport: "stdio"  # LiteLLM startet den Node-Server als Subprozess (Node ist im Image, s. Dockerfile.litellm)
+    command: "ms-365-mcp-server"
+    # --org-mode = Work/School-Konto (Entra ID). Fuer nur-lesen zusaetzlich: "--read-only".
+    args: ["--preset", "mail", "--org-mode"]
+    env:
+      # Authority-/Konto-Auswahl beim Login:
+      #   common        = Work/School UND persoenlich (Default, hier passend)
+      #   organizations = nur Work/School
+      #   consumers     = nur persoenliche Konten (Outlook.com) - DAS war der "kein Konto"-Fehler
+      #   <tenant-id>   = genau dein Tenant (GUID oder z. B. contoso.onmicrosoft.com); am robustesten fuer Work
+      MS365_MCP_TENANT_ID: "common"
+      # Token-Cache im gemounteten Volume -> Login ueberlebt Container-Neustarts.
+      MS365_MCP_TOKEN_CACHE_PATH: "/data/ms365/.token-cache.json"
+      MS365_MCP_SELECTED_ACCOUNT_PATH: "/data/ms365/.selected-account.json"
+    description: "Microsoft 365 Mail (Outlook, Work/School) - Login per ms365-login / ms365-verify-login"
+
 general_settings:
   master_key: sk-1234   # Zugriffsschutz: der Client muss diesen Key als x-litellm-api-key senden

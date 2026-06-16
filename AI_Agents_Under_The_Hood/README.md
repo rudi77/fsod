@@ -97,6 +97,19 @@ docker compose ps                # Status
 docker compose down              # alle Container stoppen + entfernen, :4000 freigeben
 ```
 
+
+**ms365 mpc server login**
+
+```powershell
+docker run --rm -it -e MS365_MCP_TENANT_ID=common -e ` 
+ MS365_MCP_TOKEN_CACHE_PATH=/data/ms365/.token-cache.json -e `
+ MS365_MCP_SELECTED_ACCOUNT_PATH=/data/ms365/.selected-account.json -v `
+ ai_agents_under_the_hood_ms365_token:/data/ms365 --entrypoint ms-365-mcp-server `
+ ai_agents_under_the_hood-litellm:latest --login --preset mail --org-mode
+```
+
+> ⚠️ Dieser `--login` ist nur ein **Single-User-Bootstrap** (ein geteiltes Token im Volume) für die lokale Demo. Für den **Mehrbenutzerbetrieb** in der Firma (jeder mit eigenem Postfach, eigene Entra-App, delegierte Scopes, OAuth/OBO) — inkl. des Szenarios **mehrerer** Entra-gestützter MCP-Server — siehe **[docs/entra-app-registration.md](docs/entra-app-registration.md)**.
+
 **Admin-UI (optional):** http://localhost:4000/ui — Login `admin` / `sk-1234`. Dafür ist der `db`-Service (Postgres) da: Die UI speichert User/Keys/Logs in der DB (sonst `Not connected to DB!` beim Login). Für den reinen MCP-Tool-Zugriff über `x-litellm-api-key` braucht man die UI **nicht** — `db` ist nur fürs UI/Key-Management nötig.
 
 > 🪟 **Windows/Jupyter:** Beide Notebooks führen die MCP-Aufrufe in einem eigenen Thread mit `ProactorEventLoop` aus (`run_async`) — nötig, damit Subprozesse/Streams unabhängig von Jupyters Event-Loop laufen.
