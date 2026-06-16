@@ -114,6 +114,21 @@ docker run --rm -it -e MS365_MCP_TENANT_ID=common -e `
 
 > 🪟 **Windows/Jupyter:** Beide Notebooks führen die MCP-Aufrufe in einem eigenen Thread mit `ProactorEventLoop` aus (`run_async`) — nötig, damit Subprozesse/Streams unabhängig von Jupyters Event-Loop laufen.
 
+## Skills-Notebook (Agent + `SKILL.md`)
+
+`AI_Agents_Skills.ipynb` zeigt das **Agent-Skills-Muster** *from scratch*: Statt alle Anweisungen fest im Prompt zu haben, **entdeckt** und **lädt** der Agent Skills bei Bedarf (*progressive disclosure*).
+
+| Begriff | Bedeutung |
+|---|---|
+| **Skill** | Ordner mit einer `SKILL.md` — Frontmatter (`name`/`description`) + ausführliche Anleitung |
+| **Discovery** | `list_skills()` liefert nur die Beschreibungen (klein, immer im Kontext) |
+| **Laden** | `read_skill(name)` holt die ganze Anleitung — nur wenn der Skill passt |
+| **`CLAUDE.md`** | immer geladener Einstieg + verbindliche Regeln |
+
+Als Demo läuft das Notebook gegen das **TuttiPaletti**-Repo (BTK-Palettenklärung): der Agent nutzt dieselben Skills wie Claude Code / Cowork, lokal über `test-mails/` statt Gmail, und schreibt `fall-log/`- und `drafts/`-Dateien — **immer nur als Vorschlag**. Voraussetzung: nur `.env` (Azure OpenAI); `ROOT` im Notebook zeigt auf das TuttiPaletti-Repo (anpassbar).
+
+> Tools/MCP = **Fähigkeiten** (was der Agent *tun* kann), Skills = **Wissen/Vorgehen** (*wie* er es tut). Es bleibt **derselbe Agent-Loop** wie in den anderen Notebooks.
+
 ## Notebook neu bauen
 
 Inhalt liegt editierbar in `notebook_source.txt` (Zell-Marker `<<<MD>>>` / `<<<CODE>>>`).
