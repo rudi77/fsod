@@ -151,6 +151,7 @@ Zeigt *from scratch*, wie **derselbe** Agentic Loop in Echtzeit arbeitet — **s
 | **Streaming** | `stream=True` liefert die Antwort **Token für Token** statt am Stück → bessere UX (*time-to-first-token*). Der einzige Trick: fragmentierte **Tool-Call-Deltas pro `index` zusammensetzen** (`accumulate_stream`). |
 | **Auftrags-Queue** (Input) | Der Agent läuft als **Worker-Thread** und holt sich neue Aufträge **selbst** aus einer `queue.Queue` (skaliert zu mehreren Workern). |
 | **Event-Bus** (Output, Pub/Sub) | Der Loop `publish`-t neutrale, typisierte `AgentEvent`s (Token, Tool-Call, Ergebnis, finale Antwort). **Mehrere Consumer** abonnieren denselben Strom: ein **UI-Renderer** (live) + ein **Metrik-Consumer** (zählt parallel). |
+| **Stop-Knopf** | Ein laufender Auftrag lässt sich **mittendrin abbrechen** — ein `threading.Event` als Cancel-Signal, das der Loop an sicheren Punkten (Schritt-Grenze, Token-Stream, vor jedem Tool) prüft: **kooperatives Abbrechen** statt Hard-Kill, wie der Stop-Knopf bei ChatGPT/Claude. |
 
 Kernbotschaft: „Streaming" und „Event-Queue" sind keine Framework-Magie, sondern ein **Producer/Consumer-Muster** um denselben Loop — es entkoppelt *was passiert* (der Loop) von *wie es angezeigt wird* (die Consumer). Voraussetzung: nur `.env` (Azure OpenAI), kein Internet.
 
