@@ -142,6 +142,20 @@ Die Demo (nur `.env` nötig, kein Internet) nutzt drei „langsame" Tools (`wett
 
 > ⚠️ Nur **nebenläufigkeitssichere** Tools parallel ausführen (Reads/Lookups). Schreibende Tools mit geteiltem Zustand brauchen Locks oder serielle Ausführung. Der `AzureOpenAI`-Client ist thread-safe, daher dürfen mehrere Sub-Agenten gleichzeitig `llm()` rufen.
 
+## Streaming-&-Event-Queue-Notebook (`AI_Agents_Streaming_EventQueue.ipynb`)
+
+Zeigt *from scratch*, wie **derselbe** Agentic Loop in Echtzeit arbeitet — **streamend** und über eine **Event-Queue** entkoppelt. Bisher war der Loop blockierend (man sieht erst nach jedem fertigen Schritt etwas) und verarbeitete genau einen Auftrag pro Aufruf. Zwei Bausteine ändern das:
+
+| Baustein | Idee |
+|---|---|
+| **Streaming** | `stream=True` liefert die Antwort **Token für Token** statt am Stück → bessere UX (*time-to-first-token*). Der einzige Trick: fragmentierte **Tool-Call-Deltas pro `index` zusammensetzen** (`accumulate_stream`). |
+| **Auftrags-Queue** (Input) | Der Agent läuft als **Worker-Thread** und holt sich neue Aufträge **selbst** aus einer `queue.Queue` (skaliert zu mehreren Workern). |
+| **Event-Bus** (Output, Pub/Sub) | Der Loop `publish`-t neutrale, typisierte `AgentEvent`s (Token, Tool-Call, Ergebnis, finale Antwort). **Mehrere Consumer** abonnieren denselben Strom: ein **UI-Renderer** (live) + ein **Metrik-Consumer** (zählt parallel). |
+
+Kernbotschaft: „Streaming" und „Event-Queue" sind keine Framework-Magie, sondern ein **Producer/Consumer-Muster** um denselben Loop — es entkoppelt *was passiert* (der Loop) von *wie es angezeigt wird* (die Consumer). Voraussetzung: nur `.env` (Azure OpenAI), kein Internet.
+
+> 🧵 Nebenläufigkeit über `threading` + `queue.Queue` (wie in den MCP-/Parallel-Notebooks): Der blockierende `stream=True`-Call lebt natürlich im Worker-Thread, mehrere Consumer sind einfach weitere Threads. Thread-sicheres Drucken über `vprint`/Lock.
+
 ## Notebook neu bauen
 
 Inhalt liegt editierbar in `notebook_source.txt` (Zell-Marker `<<<MD>>>` / `<<<CODE>>>`).
