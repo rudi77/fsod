@@ -217,6 +217,24 @@ def test_coding_tools_sandbox_and_io(tmp_path):
         reg.call("read_file", {"path": "../../etc/passwd"})
 
 
+def test_coding_tools_glob_and_grep(tmp_path):
+    reg = coding_tools(workspace=str(tmp_path), approval=False)
+    reg.call("write_file", {"path": "src/app.py", "content": "def hello():\n    return 42\n"})
+    reg.call("write_file", {"path": "src/util.py", "content": "x = 1\n"})
+    reg.call("write_file", {"path": "README.md", "content": "# Doku\n"})
+    # glob_files: nur Python-Dateien, plattformneutrale '/'-Pfade
+    py = reg.call("glob_files", {"pattern": "**/*.py"})
+    assert "src/app.py" in py and "src/util.py" in py and "README.md" not in py
+    # grep: findet Inhalt mit Pfad:Zeile
+    hit = reg.call("grep", {"pattern": "return", "glob": "**/*.py"})
+    assert "src/app.py:2:" in hit and "return 42" in hit
+    # Ignore-Ordner werden übersprungen
+    reg.call("write_file", {"path": ".git/config.py", "content": "return 99\n"})
+    assert ".git" not in reg.call("grep", {"pattern": "return"})
+    # Ungültiges Regex -> Fehlertext statt Crash
+    assert "ERROR" in reg.call("grep", {"pattern": "([unbalanced"})
+
+
 def test_coding_tools_run_shell_no_approval(tmp_path):
     reg = coding_tools(workspace=str(tmp_path), approval=False)
     out = reg.call("run_shell", {"command": "echo hallo"})
@@ -388,7 +406,7 @@ def test_cli_parser_defaults_and_oneshot():
     args = cli.build_parser().parse_args(["Schreibe", "fizzbuzz"])
     assert args.prompt == ["Schreibe", "fizzbuzz"]
     assert args.strategy == "react"
-    assert args.workspace == "./agent_workspace"
+    assert args.workspace == "."
     assert args.yes is False
 
 

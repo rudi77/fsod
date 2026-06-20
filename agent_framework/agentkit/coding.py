@@ -16,8 +16,11 @@ from pathlib import Path
 from typing import Callable, Optional
 
 CODING_SYSTEM = (
-    "Du bist ein Coding-Agent und arbeitest ausschließlich in der Sandbox. "
-    "Plane deine Arbeit mit update_plan. Schreibe Code mit write_file/edit_file, "
+    "Du bist ein Coding-Agent und arbeitest im aktuellen Projektverzeichnis "
+    "(deine Sandbox; Pfade außerhalb sind gesperrt). Verschaffe dir zuerst mit "
+    "list_files/glob_files/grep/read_file einen Überblick über den vorhandenen Code, "
+    "bevor du ihn änderst (glob_files findet Dateien, grep durchsucht Inhalte — beide "
+    "read-only). Plane deine Arbeit mit update_plan. Schreibe Code mit write_file/edit_file, "
     "führe ihn mit run_shell aus und teste mit pytest. Schlägt ein Test fehl, lies "
     "die Fehlermeldung, korrigiere den Code und versuche es erneut. Erkläre am Ende "
     "kurz, was du gebaut hast."
@@ -35,6 +38,10 @@ class CodingTools:
         self.shell_timeout = shell_timeout
         self._approve = approve or self._default_approve
 
+    # Ordner, die bei Suche/Glob übersprungen werden (Rauschen statt Code).
+    _IGNORE = {".git", "__pycache__", ".venv", "venv", "node_modules",
+               ".mypy_cache", ".pytest_cache", ".idea", ".vscode"}
+
     # --- Sicherheit ---
     def _safe(self, path: str) -> Path:
         """Sperrt einen Pfad in die Sandbox ein."""
@@ -42,6 +49,10 @@ class CodingTools:
         if not (p == self.workspace or str(p).startswith(str(self.workspace) + os.sep)):
             raise ValueError(f"Pfad außerhalb der Sandbox: {path}")
         return p
+
+    def _ignored(self, p: Path) -> bool:
+        """True, wenn der Pfad in einem Ignore-Ordner liegt."""
+        return any(part in self._IGNORE for part in p.relative_to(self.workspace).parts)
 
     @staticmethod
     def _default_approve(command: str) -> bool:
@@ -52,6 +63,44 @@ class CodingTools:
     def list_files(self, path: str = ".") -> str:
         """Listet die Dateien im (Sandbox-)Verzeichnis auf."""
         return "\n".join(sorted(os.listdir(self._safe(path)))) or "(leer)"
+
+    def glob_files(self, pattern: str = "**/*", path: str = ".", limit: int = 200) -> str:
+        """Findet Dateien per Glob-Muster (z. B. '**/*.py') relativ zum Verzeichnis."""
+        root = self._safe(path)
+        matches = sorted(
+            str(p.relative_to(self.workspace)).replace(os.sep, "/")
+            for p in root.glob(pattern)
+            if p.is_file() and not self._ignored(p)
+        )
+        if not matches:
+            return "(keine Treffer)"
+        extra = len(matches) - limit
+        shown = matches[:limit]
+        return "\n".join(shown) + (f"\n…(+{extra} weitere)" if extra > 0 else "")
+
+    def grep(self, pattern: str, path: str = ".", glob: str = "**/*", limit: int = 200) -> str:
+        """Durchsucht Dateiinhalte per Regex; liefert 'pfad:zeile: text' je Treffer."""
+        import re
+        try:
+            rx = re.compile(pattern)
+        except re.error as e:
+            return f"ERROR: ungültiges Regex: {e}"
+        root = self._safe(path)
+        hits: list[str] = []
+        for p in sorted(root.glob(glob)):
+            if not p.is_file() or self._ignored(p):
+                continue
+            try:
+                text = p.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            rel = str(p.relative_to(self.workspace)).replace(os.sep, "/")
+            for i, line in enumerate(text.splitlines(), 1):
+                if rx.search(line):
+                    hits.append(f"{rel}:{i}: {line.strip()[:200]}")
+                    if len(hits) >= limit:
+                        return "\n".join(hits) + f"\n…(abgeschnitten bei {limit} Treffern)"
+        return "\n".join(hits) or "(keine Treffer)"
 
     def read_file(self, path: str) -> str:
         """Liest eine Datei aus der Sandbox."""
@@ -96,6 +145,19 @@ class CodingTools:
         registry.add("list_files", "Listet Dateien in einem Verzeichnis der Sandbox.",
                      {"type": "object", "properties": {"path": {"type": "string"}}, "required": []},
                      self.list_files)
+        registry.add("glob_files", "Findet Dateien per Glob-Muster (z. B. '**/*.py'). Read-only, keine Rückfrage.",
+                     {"type": "object", "properties": {
+                         "pattern": {"type": "string", "description": "Glob-Muster, z. B. '**/*.py' oder 'src/*.ts'."},
+                         "path": {"type": "string", "description": "Startverzeichnis (Default '.')."}},
+                      "required": ["pattern"]},
+                     self.glob_files)
+        registry.add("grep", "Durchsucht Dateiinhalte per Regex und gibt 'pfad:zeile: text' zurück. Read-only.",
+                     {"type": "object", "properties": {
+                         "pattern": {"type": "string", "description": "Regex-Suchmuster."},
+                         "path": {"type": "string", "description": "Startverzeichnis (Default '.')."},
+                         "glob": {"type": "string", "description": "Auf diese Dateien beschränken, z. B. '**/*.py'."}},
+                      "required": ["pattern"]},
+                     self.grep)
         registry.add("read_file", "Liest eine Datei aus der Sandbox.",
                      {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]},
                      self.read_file)

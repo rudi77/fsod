@@ -321,7 +321,8 @@ def handle_slash(cmd: str, agent: Agent, tools: ToolRegistry,
 
 # --------------------------------------------------------------------- Banner
 def banner(args) -> str:
-    ws = _abbrev(str(args.workspace), 40)
+    from pathlib import Path
+    ws = _abbrev(str(Path(args.workspace).resolve()), 40)
     # (sichtbarer Text, eingefärbter Text) — die Polsterung richtet sich nach dem
     # sichtbaren Text, damit ANSI-Codes die Ausrichtung nicht verfälschen.
     rows = [
@@ -370,8 +371,9 @@ def build_parser() -> argparse.ArgumentParser:
         description="Claude-Code-artiges CLI für den agentkit-Agenten.",
     )
     p.add_argument("prompt", nargs="*", help="Aufgabe (one-shot). Ohne Angabe: interaktive Session.")
-    p.add_argument("-w", "--workspace", default="./agent_workspace",
-                   help="Sandbox-Verzeichnis für die Coding-Tools (Default: ./agent_workspace).")
+    p.add_argument("-w", "--workspace", default=".",
+                   help="Arbeits-/Sandbox-Verzeichnis für die Coding-Tools "
+                        "(Default: . — das aktuelle Verzeichnis, wie Claude Code).")
     p.add_argument("-s", "--strategy", default="react", choices=["react", "plan", "plain"],
                    help="Agenten-Strategie (Default: react).")
     p.add_argument("--skills", metavar="DIR", default=None,
@@ -380,7 +382,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Langzeitgedächtnis-Datei (JSONL) für remember/recall.")
     p.add_argument("--provider", default="auto", choices=["auto", "azure", "openai"],
                    help="LLM-Provider (Default: auto — aus der .env erraten).")
-    p.add_argument("--max-steps", type=int, default=16, help="Max. Loop-Schritte pro Aufgabe.")
+    p.add_argument("--max-steps", type=int, default=160, help="Max. Loop-Schritte pro Aufgabe.")
     p.add_argument("-y", "--yes", action="store_true",
                    help="Shell-Befehle ohne Rückfrage ausführen (Vorsicht!).")
     p.add_argument("--steps", action="store_true", help="Schritt-Grenzen mit anzeigen.")

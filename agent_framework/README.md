@@ -17,7 +17,7 @@ sonst:
 |---|---|---|
 | **Agentic Loop** | `agentkit/agent.py` | streamend & event-basiert; ReAct **und** Plan-and-Execute über `strategy=`; **parallele Tool-Calls**; Harness (max_steps, Retries, Fehlertoleranz, Compaction, Stop-Knopf) |
 | **Tools** | `agentkit/tools.py` | `@registry.tool()` — Schema automatisch aus Typ-Hints + Docstring (oder explizit) |
-| **Coding-Tools** | `agentkit/coding.py` | `CodingTools`: `list_files`/`read_file`/`write_file`/`edit_file`/`run_shell` mit Sandbox + Approval |
+| **Coding-Tools** | `agentkit/coding.py` | `CodingTools`: `list_files`/`glob_files`/`grep`/`read_file`/`write_file`/`edit_file`/`run_shell` mit Sandbox + Approval |
 | **Skills** | `agentkit/skills.py` | `Skills` + `list_skills`/`read_skill`-Tools — Vorgehen als `SKILL.md`-Datei, on demand geladen (offener Agent-Skills-Standard, progressive disclosure) |
 | **Planning** | `agentkit/planning.py` | `Plan` + `update_plan`-Tool — eine mitgeführte, sichtbare Todo-Liste |
 | **Sub-Agents** | `agentkit/subagents.py` | `add_subagent()` — ein Agent als `delegate`-Tool eines Orchestrators (Kontext-Isolation, parallel) |
@@ -92,7 +92,7 @@ Fertig — fizzbuzz.py und die Tests sind grün.
 
 | Flag | Wirkung |
 |---|---|
-| `-w, --workspace DIR` | Sandbox-Verzeichnis (Default `./agent_workspace`) |
+| `-w, --workspace DIR` | Arbeits-/Sandbox-Verzeichnis (Default `.` — das aktuelle Verzeichnis, wie Claude Code) |
 | `-s, --strategy {react,plan,plain}` | Agenten-Strategie (Default `react`) |
 | `--skills DIR` | Skills (`SKILL.md`-Ordner) aktivieren — on demand geladen |
 | `--memory FILE` | Langzeitgedächtnis (JSONL) für `remember`/`recall` |
