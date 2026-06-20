@@ -146,6 +146,34 @@ orchestrator = Agent(llm, tools=orch_tools, parallel_tools=True,
 print(orchestrator.run("Vergleiche Wien, Berlin und Tokio."))  # Sub-Agenten laufen parallel
 ```
 
+### Event-Forwarding der Sub-Agents
+
+Übergibt man `add_subagent(..., bus=bus)` einen `EventBus`, laufen **alle** Events
+der Sub-Agenten in denselben Bus — getaggt mit `event.source` (z. B. `"delegate:Wien"`),
+damit Consumer die (parallel laufenden) Sub-Agenten auseinanderhalten. So werden die
+verschränkten Trace-Zeilen sichtbar:
+
+```python
+from agentkit import EventBus
+from agentkit.events import DONE
+
+bus = EventBus()
+q = bus.subscribe()
+add_subagent(orch_tools, "delegate", "...", llm, tools=city_tools,
+             system="...", bus=bus)                 # <- Forwarding an
+orchestrator = Agent(llm, tools=orch_tools, parallel_tools=True, system="...")
+
+# in einem Consumer-Thread:
+ev = q.get()
+print(f"[{ev.source or 'ORCH'}] {ev.type}")          # source trennt Orchestrator/Sub-Agenten
+
+orchestrator.run_on_bus("Vergleiche Wien, Berlin und Tokio.", bus, source="")
+```
+
+`event.source == ""` ist der Haupt-Agent. Jeder Sub-Agent schließt mit einem eigenen
+`DONE` (mit seiner `source`); der Root-`DONE` trägt `source == ""` — daran erkennt ein
+Consumer das endgültige Ende.
+
 ## MCP
 
 ```python

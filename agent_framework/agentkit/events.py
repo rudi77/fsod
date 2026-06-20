@@ -30,6 +30,7 @@ class AgentEvent:
     type: str
     data: Any = None
     task_id: int = -1
+    source: str = ""   # leer = Haupt-Agent; bei Sub-Agents deren Label (z. B. "delegate:Wien")
 
 
 class EventBus:

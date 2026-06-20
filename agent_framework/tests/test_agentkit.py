@@ -258,3 +258,43 @@ def test_add_subagent_registers_delegate_tool():
                  system="Recherche.", strategy="plain")
     assert orch.has("delegate")
     assert orch.call("delegate", {"auftrag": "Wien"}) == "Steckbrief Wien"
+
+
+def test_subagent_forwards_events_to_shared_bus():
+    bus = EventBus()
+    q = bus.subscribe()
+
+    # Sub-Agent: ein Token + finale Antwort.
+    sub_llm = FakeLLM([[_chunk(content="Steckbrief Wien")]])
+    orch_tools = ToolRegistry()
+    add_subagent(orch_tools, "delegate", "Delegiert.", sub_llm,
+                 system="Recherche.", strategy="plain", bus=bus)
+
+    # Orchestrator: ruft delegate, dann finale Antwort.
+    orch_llm = FakeLLM([
+        [_chunk(tool={"id": "d0", "name": "delegate", "arguments": '{"auftrag": "Wien"}'})],
+        [_chunk(content="Tabelle fertig")],
+    ])
+    orchestrator = Agent(orch_llm, tools=orch_tools, strategy="plain")
+    final = orchestrator.run_on_bus("Vergleiche Wien.", bus, source="")
+
+    seen = []
+    while not q.empty():
+        seen.append(q.get_nowait())
+
+    sources = {e.source for e in seen}
+    assert "delegate:Wien" in sources          # Sub-Agent-Events sind getaggt
+    assert "" in sources                       # Orchestrator-Events ebenfalls dabei
+
+    # Sub-Agent-Token + finale Antwort wurden weitergeleitet.
+    sub_finals = [e for e in seen if e.source == "delegate:Wien" and e.type == FINAL]
+    assert sub_finals and sub_finals[0].data == "Steckbrief Wien"
+
+    # Der Orchestrator hat das Sub-Ergebnis als Tool-Ergebnis bekommen.
+    tool_results = [e for e in seen if e.source == "" and e.type == TOOL_RESULT]
+    assert tool_results[0].data["result"] == "Steckbrief Wien"
+
+    # Jeder Sub-Agent schließt mit eigenem DONE; der Root-DONE trägt source="".
+    assert any(e.type == DONE and e.source == "delegate:Wien" for e in seen)
+    assert seen[-1].type == DONE and seen[-1].source == ""
+    assert final == "Tabelle fertig"

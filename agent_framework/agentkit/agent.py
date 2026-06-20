@@ -233,13 +233,20 @@ class Agent:
                 final = ev.data if isinstance(ev.data, str) else "(abgebrochen)"
         return final
 
-    def run_on_bus(self, task: str, bus, task_id: int = -1, cancel=None) -> None:
-        """Arbeitet den Auftrag ab und publiziert jedes Event auf einen EventBus.
-        Schließt mit einem DONE-Event. Ideal für Worker-Threads + mehrere Consumer."""
+    def run_on_bus(self, task: str, bus, task_id: int = -1, cancel=None,
+                   source: str = "") -> str:
+        """Arbeitet den Auftrag ab, publiziert jedes Event (mit `source`-Tag) auf
+        einen EventBus und schließt mit einem DONE-Event. Gibt die finale Antwort
+        zurück. Ideal für Worker-Threads, mehrere Consumer und Sub-Agent-Forwarding."""
+        final = "(keine Antwort)"
         try:
             for ev in self.run_iter(task, cancel=cancel):
                 ev.task_id = task_id
+                ev.source = source
                 bus.publish(ev)
+                if ev.type in (FINAL, CANCELLED):
+                    final = ev.data if isinstance(ev.data, str) else "(abgebrochen)"
         except Exception as e:
-            bus.publish(AgentEvent(ERROR, {"error": str(e)}, task_id))
-        bus.publish(AgentEvent(DONE, None, task_id))
+            bus.publish(AgentEvent(ERROR, {"error": str(e)}, task_id, source))
+        bus.publish(AgentEvent(DONE, None, task_id, source))
+        return final

@@ -19,12 +19,16 @@ def add_subagent(registry: ToolRegistry, name: str, description: str, llm,
                  tools: Optional[ToolRegistry] = None, system: Optional[str] = None,
                  strategy: str = "react", max_steps: int = 12,
                  param_name: str = "auftrag", param_desc: str = "Der Teilauftrag in Worten.",
-                 parallel_tools: bool = True) -> ToolRegistry:
+                 parallel_tools: bool = True, bus=None) -> ToolRegistry:
     """Registriert einen Sub-Agenten als Tool im `registry` des Orchestrators.
 
     Jeder Aufruf erzeugt einen FRISCHEN Agent (eigenes Kurzzeitgedächtnis) und
     gibt dessen finale Antwort als Text zurück. Thread-safe, weil der
     OpenAI/Azure-Client thread-safe ist und jeder Sub-Agent eigenen State hat.
+
+    Wird ein `bus` (EventBus) übergeben, werden ALLE Events des Sub-Agenten dorthin
+    weitergeleitet — getaggt mit `source="<name>:<auftrag>"`, damit Consumer die
+    (auch parallel laufenden) Sub-Agenten auseinanderhalten können.
     """
     # spät importieren -> kein Zirkelimport (agent.py nutzt nichts von hier)
     from .agent import Agent
@@ -33,7 +37,11 @@ def add_subagent(registry: ToolRegistry, name: str, description: str, llm,
         task = kwargs.get(param_name, "")
         sub = Agent(llm, tools=tools or ToolRegistry(), system=system,
                     strategy=strategy, max_steps=max_steps, parallel_tools=parallel_tools)
-        return sub.run(task)
+        if bus is None:
+            return sub.run(task)
+        # Event-Forwarding: Sub-Agent-Events laufen in den geteilten Bus.
+        source = f"{name}:{' '.join(task.split())[:24]}"
+        return sub.run_on_bus(task, bus, source=source)
 
     registry.add(
         name, description,
