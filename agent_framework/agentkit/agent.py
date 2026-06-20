@@ -55,7 +55,7 @@ class Agent:
                  system: Optional[str] = None, strategy: str = "react",
                  long_term=None, max_steps: int = 12, token_budget: int = 8000,
                  memory: Optional[ShortTermMemory] = None, parallel_tools: bool = True,
-                 plan=None):
+                 plan=None, skills=None):
         if strategy not in _PREAMBLES:
             raise ValueError(f"strategy muss eine von {list(_PREAMBLES)} sein, war '{strategy}'")
         self.llm = llm
@@ -74,6 +74,11 @@ class Agent:
         self.long_term = long_term
         if long_term is not None:
             long_term.register_tools(self.tools)
+
+        # Skills als Tools (list_skills/read_skill) einklinken — Wissen on demand.
+        self.skills = skills
+        if skills is not None:
+            skills.register(self.tools)
 
         system_prompt = self._build_system(system, strategy)
         if memory is None:

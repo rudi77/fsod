@@ -18,6 +18,7 @@ sonst:
 | **Agentic Loop** | `agentkit/agent.py` | streamend & event-basiert; ReAct **und** Plan-and-Execute über `strategy=`; **parallele Tool-Calls**; Harness (max_steps, Retries, Fehlertoleranz, Compaction, Stop-Knopf) |
 | **Tools** | `agentkit/tools.py` | `@registry.tool()` — Schema automatisch aus Typ-Hints + Docstring (oder explizit) |
 | **Coding-Tools** | `agentkit/coding.py` | `CodingTools`: `list_files`/`read_file`/`write_file`/`edit_file`/`run_shell` mit Sandbox + Approval |
+| **Skills** | `agentkit/skills.py` | `Skills` + `list_skills`/`read_skill`-Tools — Vorgehen als `SKILL.md`-Datei, on demand geladen (offener Agent-Skills-Standard, progressive disclosure) |
 | **Planning** | `agentkit/planning.py` | `Plan` + `update_plan`-Tool — eine mitgeführte, sichtbare Todo-Liste |
 | **Sub-Agents** | `agentkit/subagents.py` | `add_subagent()` — ein Agent als `delegate`-Tool eines Orchestrators (Kontext-Isolation, parallel) |
 | **Events** | `agentkit/events.py` | typisierte `AgentEvent`s + `EventBus` (Pub/Sub, mehrere Consumer) |
@@ -127,6 +128,37 @@ print(plan.render())
 - **`update_plan`**: das Modell schreibt seinen Plan als Schrittliste mit Status;
   ein `Plan(on_update=...)`-Callback macht ihn live sichtbar (z. B. als `PLAN`-Event).
 
+## Skills (Wissen on demand)
+
+Tools/MCP = **Fähigkeiten** (was der Agent *tun* kann). **Skills** = **Vorgehen**
+(*wie* er es tut): vorgefertigte Arbeitsanweisungen als Dateien. Ein Skill ist — nach
+dem offenen **Agent-Skills-Standard** — einfach ein Ordner mit einer `SKILL.md`:
+
+```
+skills/
+  rechnungsrueckfrage/
+    SKILL.md      # --- Frontmatter: name + description --- danach die Anleitung
+```
+
+```python
+from agentkit import Agent, Skills, ToolRegistry, CodingTools, SKILL_SYSTEM, azure_from_env
+
+tools = ToolRegistry()
+CodingTools(workspace="./agent_workspace", approval=False).register(tools)  # read/write
+
+agent = Agent(azure_from_env(), tools=tools,
+              skills=Skills("./skills"),       # gibt list_skills + read_skill
+              system=SKILL_SYSTEM, strategy="react")
+agent.run("Erstelle einen CHANGELOG-Eintrag für 1.2.0 …")
+```
+
+**Progressive Disclosure:** Permanent im Kontext liegt nur der schlanke Index aus
+`list_skills` (Name + Beschreibung jedes Skills). Die ausführliche Anleitung holt der
+Agent erst per `read_skill(name)`, wenn ein Skill wirklich passt — so skaliert es auf
+beliebig viele Skills, ohne den System-Prompt zu sprengen. `Skills("…").register(tools)`
+geht auch ohne den `skills=`-Parameter; `skills_tools(skills_dir=…)` legt direkt eine
+fertige Registry an.
+
 ## Parallele Tool-Calls & Sub-Agents
 
 Liefert das Modell mehrere Tool-Calls in **einer** Antwort, führt der Agent sie
@@ -200,6 +232,7 @@ mcp.close()
 | `examples/05_memory.py` | Kurzzeit- + Langzeitgedächtnis |
 | `examples/06_coding_agent.py` | Coding-Tools + `update_plan` + Sandbox (FizzBuzz + Tests) |
 | `examples/07_parallel_subagents.py` | parallele Tool-Calls + Sub-Agents (Map-Reduce) |
+| `examples/08_skills.py` | Skills (`SKILL.md`) on demand laden — progressive disclosure |
 
 ## Tests
 
