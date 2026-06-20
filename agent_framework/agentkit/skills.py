@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 SKILL_SYSTEM = (
     "Du hast Zugriff auf Skills — vorgefertigte Arbeitsanweisungen als Dateien. "
@@ -83,23 +83,19 @@ class Skills:
             })
         return out
 
-    def _path_for(self, name: str) -> Optional[Path]:
-        """Findet die SKILL.md zu einem Skill — über Frontmatter-Name oder Ordnernamen."""
-        for p in self._skill_files():
-            fm = parse_frontmatter(p.read_text(encoding="utf-8"))
-            if name in (fm.get("name"), p.parent.name):
-                return p
-        return None
-
     # --- Tool-Implementierungen ---
     def list_skills(self) -> str:
         """Listet verfügbare Skills (Name + Beschreibung)."""
         return json.dumps(self.index(), ensure_ascii=False, indent=2)
 
     def read_skill(self, name: str) -> str:
-        """Lädt die vollständige Anleitung (SKILL.md) eines Skills."""
-        p = self._path_for(name)
-        return p.read_text(encoding="utf-8") if p else f"(kein Skill '{name}')"
+        """Lädt die vollständige Anleitung (SKILL.md) eines Skills — gefunden über
+        Frontmatter-Name oder Ordnernamen (eine Lesung pro Datei)."""
+        for p in self._skill_files():
+            content = p.read_text(encoding="utf-8")
+            if name in (parse_frontmatter(content).get("name"), p.parent.name):
+                return content
+        return f"(kein Skill '{name}')"
 
     def register(self, registry) -> "Skills":
         """Bietet dem Agenten `list_skills` / `read_skill` als Tools an."""
