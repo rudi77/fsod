@@ -11,8 +11,8 @@ from types import SimpleNamespace
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from agentkit import (Agent, AgentEvent, CodingTools, EventBus,  # noqa: E402
-                      LongTermMemory, Plan, ShortTermMemory, ToolRegistry,
-                      add_subagent, coding_tools)
+                      LongTermMemory, Plan, ShortTermMemory, Skills, ToolRegistry,
+                      add_subagent, coding_tools, skills_tools)
 from agentkit.events import DONE, FINAL, TOOL_CALL, TOOL_RESULT  # noqa: E402
 from agentkit.mcp import mcp_tools_to_schemas  # noqa: E402
 
@@ -221,6 +221,58 @@ def test_coding_tools_run_shell_no_approval(tmp_path):
     reg = coding_tools(workspace=str(tmp_path), approval=False)
     out = reg.call("run_shell", {"command": "echo hallo"})
     assert "hallo" in out and "exit=0" in out
+
+
+# ------------------------------------------------------------------ Skills
+def _write_skill(root, folder, name, description, body="Schritt 1. Tu etwas."):
+    d = root / folder
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "SKILL.md").write_text(
+        f"---\nname: {name}\ndescription: {description}\n---\n\n# {name}\n\n{body}\n",
+        encoding="utf-8",
+    )
+
+
+def test_skills_index_only_frontmatter(tmp_path):
+    _write_skill(tmp_path, "alpha", "alpha", "Macht A", body="GEHEIMER LANGER BODY")
+    _write_skill(tmp_path, "beta", "beta", "Macht B")
+    sk = Skills(str(tmp_path))
+    idx = sk.index()
+    assert {s["name"] for s in idx} == {"alpha", "beta"}
+    # Discovery liefert NUR Frontmatter -> der Body ist (noch) nicht im Index.
+    assert "GEHEIMER LANGER BODY" not in sk.list_skills()
+    assert any(s["description"] == "Macht A" for s in idx)
+
+
+def test_skills_read_full_body_on_demand(tmp_path):
+    _write_skill(tmp_path, "alpha", "alpha", "Macht A", body="GEHEIMER LANGER BODY")
+    sk = Skills(str(tmp_path))
+    # read_skill lädt die ganze SKILL.md (progressive disclosure).
+    assert "GEHEIMER LANGER BODY" in sk.read_skill("alpha")
+    assert "kein Skill" in sk.read_skill("gibtsnicht")
+
+
+def test_skills_read_by_folder_name_when_frontmatter_differs(tmp_path):
+    # Frontmatter-Name weicht vom Ordnernamen ab -> beide Wege müssen finden.
+    _write_skill(tmp_path, "ordner-x", "anzeige-name", "Beschreibung")
+    sk = Skills(str(tmp_path))
+    assert "anzeige-name" in sk.read_skill("anzeige-name")
+    assert "anzeige-name" in sk.read_skill("ordner-x")
+
+
+def test_skills_register_tools_and_missing_dir(tmp_path):
+    _write_skill(tmp_path, "alpha", "alpha", "Macht A")
+    reg = skills_tools(skills_dir=str(tmp_path))
+    assert reg.has("list_skills") and reg.has("read_skill")
+    assert "alpha" in reg.call("list_skills", {})
+    # Fehlendes Verzeichnis -> leerer Index, kein Crash.
+    empty = Skills(str(tmp_path / "gibtsnicht"))
+    assert empty.index() == []
+
+
+def test_agent_skills_param_registers_tools():
+    agent = Agent(FakeLLM([]), skills=Skills("./does-not-matter"), strategy="plain")
+    assert agent.tools.has("list_skills") and agent.tools.has("read_skill")
 
 
 # ------------------------------------------------------- Parallel + Subagents
