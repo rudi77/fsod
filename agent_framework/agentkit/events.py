@@ -18,6 +18,7 @@ STEP = "step"                # ein neuer Loop-Schritt beginnt
 TEXT_DELTA = "text_delta"    # ein Stück der Antwort (Streaming-Token)
 TOOL_CALL = "tool_call"      # Agent ruft ein Tool auf
 TOOL_RESULT = "tool_result"  # Ergebnis eines Tools
+PLAN = "plan"                # der Agent hat seinen Plan / seine Todo-Liste aktualisiert
 FINAL = "final"              # finale Antwort steht
 ERROR = "error"              # ein Tool/Call ist schiefgegangen
 CANCELLED = "cancelled"      # Auftrag wurde mittendrin abgebrochen

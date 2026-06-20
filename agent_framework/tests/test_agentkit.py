@@ -10,8 +10,9 @@ from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from agentkit import (Agent, AgentEvent, EventBus, LongTermMemory,  # noqa: E402
-                      ShortTermMemory, ToolRegistry)
+from agentkit import (Agent, AgentEvent, CodingTools, EventBus,  # noqa: E402
+                      LongTermMemory, Plan, ShortTermMemory, ToolRegistry,
+                      add_subagent, coding_tools)
 from agentkit.events import DONE, FINAL, TOOL_CALL, TOOL_RESULT  # noqa: E402
 from agentkit.mcp import mcp_tools_to_schemas  # noqa: E402
 
@@ -173,3 +174,87 @@ def test_agent_run_on_bus_emits_done():
         seen.append(q.get_nowait())
     assert seen[-1].type == DONE
     assert all(e.task_id == 7 for e in seen)
+
+
+# ---------------------------------------------------------------- Planning
+def test_plan_update_and_render():
+    plan = Plan()
+    out = plan.update([
+        {"step": "Code schreiben", "status": "done"},
+        {"step": "Tests", "status": "in_progress"},
+        {"step": "Aufräumen", "status": "pending"},
+    ])
+    assert "[x] 1. Code schreiben" in out
+    assert "[~] 2. Tests" in out
+    assert "[ ] 3. Aufräumen" in out
+
+
+def test_plan_registers_update_plan_tool_and_fires_callback():
+    seen = {}
+    plan = Plan(on_update=lambda p: seen.setdefault("steps", len(p.steps)))
+    reg = ToolRegistry()
+    plan.register_tool(reg)
+    assert reg.has("update_plan")
+    reg.call("update_plan", {"steps": [{"step": "A", "status": "pending"}]})
+    assert seen["steps"] == 1
+
+
+# ----------------------------------------------------------- Coding-Tools
+def test_coding_tools_sandbox_and_io(tmp_path):
+    ct = CodingTools(workspace=str(tmp_path), approval=False)
+    reg = ToolRegistry()
+    ct.register(reg)
+    assert "20 Zeichen" in reg.call("write_file", {"path": "a.txt", "content": "x" * 20})
+    assert reg.call("read_file", {"path": "a.txt"}) == "x" * 20
+    assert "a.txt" in reg.call("list_files", {"path": "."})
+    # edit_file
+    reg.call("write_file", {"path": "b.txt", "content": "hallo welt"})
+    reg.call("edit_file", {"path": "b.txt", "old": "welt", "new": "agent"})
+    assert reg.call("read_file", {"path": "b.txt"}) == "hallo agent"
+    # Sandbox-Ausbruch wird verhindert (im Agent-Loop würde daraus ein ERROR-Ergebnis)
+    import pytest
+    with pytest.raises(ValueError):
+        reg.call("read_file", {"path": "../../etc/passwd"})
+
+
+def test_coding_tools_run_shell_no_approval(tmp_path):
+    reg = coding_tools(workspace=str(tmp_path), approval=False)
+    out = reg.call("run_shell", {"command": "echo hallo"})
+    assert "hallo" in out and "exit=0" in out
+
+
+# ------------------------------------------------------- Parallel + Subagents
+def test_parallel_tools_preserve_order_and_pairing():
+    reg = ToolRegistry()
+
+    @reg.tool()
+    def slow(x: int) -> int:
+        """Verdoppelt x."""
+        import time
+        time.sleep(0.05)
+        return x * 2
+
+    # Eine Antwort mit DREI Tool-Calls -> parallel ausgeführt.
+    turn1 = [
+        _chunk(tool={"id": "t0", "name": "slow", "arguments": '{"x": 1}'}, index=0),
+        _chunk(tool={"id": "t1", "name": "slow", "arguments": '{"x": 2}'}, index=1),
+        _chunk(tool={"id": "t2", "name": "slow", "arguments": '{"x": 3}'}, index=2),
+    ]
+    turn2 = [_chunk(content="fertig")]
+    agent = Agent(FakeLLM([turn1, turn2]), tools=reg, strategy="plain", parallel_tools=True)
+    events = list(agent.run_iter("rechne"))
+    results = [e.data["result"] for e in events if e.type == TOOL_RESULT]
+    assert results == ["2", "4", "6"]  # Reihenfolge erhalten
+    # tool-Nachrichten tragen die passenden IDs in Reihenfolge
+    tool_msgs = [m for m in agent.memory.messages if m.get("role") == "tool"]
+    assert [m["tool_call_id"] for m in tool_msgs] == ["t0", "t1", "t2"]
+
+
+def test_add_subagent_registers_delegate_tool():
+    orch = ToolRegistry()
+    # Sub-Agent gibt einfach "fertig" zurück.
+    sub_llm = FakeLLM([[_chunk(content="Steckbrief Wien")]])
+    add_subagent(orch, "delegate", "Delegiert einen Auftrag.", sub_llm,
+                 system="Recherche.", strategy="plain")
+    assert orch.has("delegate")
+    assert orch.call("delegate", {"auftrag": "Wien"}) == "Steckbrief Wien"

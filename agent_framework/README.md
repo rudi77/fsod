@@ -15,8 +15,11 @@ sonst:
 
 | Baustein | Datei | Inhalt |
 |---|---|---|
-| **Agentic Loop** | `agentkit/agent.py` | streamend & event-basiert; ReAct **und** Plan-and-Execute über `strategy=`; Harness (max_steps, Retries, Fehlertoleranz, Compaction, Stop-Knopf) |
+| **Agentic Loop** | `agentkit/agent.py` | streamend & event-basiert; ReAct **und** Plan-and-Execute über `strategy=`; **parallele Tool-Calls**; Harness (max_steps, Retries, Fehlertoleranz, Compaction, Stop-Knopf) |
 | **Tools** | `agentkit/tools.py` | `@registry.tool()` — Schema automatisch aus Typ-Hints + Docstring (oder explizit) |
+| **Coding-Tools** | `agentkit/coding.py` | `CodingTools`: `list_files`/`read_file`/`write_file`/`edit_file`/`run_shell` mit Sandbox + Approval |
+| **Planning** | `agentkit/planning.py` | `Plan` + `update_plan`-Tool — eine mitgeführte, sichtbare Todo-Liste |
+| **Sub-Agents** | `agentkit/subagents.py` | `add_subagent()` — ein Agent als `delegate`-Tool eines Orchestrators (Kontext-Isolation, parallel) |
 | **Events** | `agentkit/events.py` | typisierte `AgentEvent`s + `EventBus` (Pub/Sub, mehrere Consumer) |
 | **Memory** | `agentkit/memory.py` | `ShortTermMemory` (Historie, Token-Budget, Compaction) + `LongTermMemory` (persistent, als `remember`/`recall`-Tools) |
 | **MCP** | `agentkit/mcp.py` | `MCPClient` — persistente stdio-Session, Server-Tools in die Registry |
@@ -103,6 +106,46 @@ agent.run("Worum ging es gerade?")                          # Kurzzeit (gleiche 
 `ShortTermMemory` misst das Token-Budget und komprimiert alte Historie automatisch,
 wenn `token_budget` überschritten wird.
 
+## Coding-Agent (Tools + Plan + Sandbox)
+
+```python
+from agentkit import Agent, CodingTools, Plan, ToolRegistry, CODING_SYSTEM, azure_from_env
+
+tools = ToolRegistry()
+CodingTools(workspace="./agent_workspace", approval=True).register(tools)  # write/edit/read/list/run_shell
+
+plan = Plan()  # update_plan-Tool: mitgeführte Todo-Liste
+agent = Agent(azure_from_env(), tools=tools, system=CODING_SYSTEM,
+              strategy="plan", plan=plan)
+agent.run("Schreibe fizzbuzz.py + pytest-Tests und mach sie grün.")
+print(plan.render())
+```
+
+- **Sandbox**: alle Pfade werden in den Workspace eingesperrt; `run_shell` läuft dort.
+- **Approval**: `run_shell` fragt vor jeder Ausführung (`approval=False` für Automatik,
+  oder eigenen `approve=callback` übergeben).
+- **`update_plan`**: das Modell schreibt seinen Plan als Schrittliste mit Status;
+  ein `Plan(on_update=...)`-Callback macht ihn live sichtbar (z. B. als `PLAN`-Event).
+
+## Parallele Tool-Calls & Sub-Agents
+
+Liefert das Modell mehrere Tool-Calls in **einer** Antwort, führt der Agent sie
+nebenläufig aus (`parallel_tools=True`, Default). Die Ergebnis-Reihenfolge bleibt
+erhalten. Ein **Sub-Agent** ist ein eigenständiger Agent-Loop als Tool:
+
+```python
+from agentkit import Agent, ToolRegistry, add_subagent, azure_from_env
+
+llm = azure_from_env()
+orch_tools = ToolRegistry()
+add_subagent(orch_tools, "delegate", "Delegiert einen Rechercheauftrag.",
+             llm, tools=city_tools, system="Recherchiere genau eine Stadt.")
+
+orchestrator = Agent(llm, tools=orch_tools, parallel_tools=True,
+                     system="Rufe delegate für JEDE Stadt in DERSELBEN Antwort auf.")
+print(orchestrator.run("Vergleiche Wien, Berlin und Tokio."))  # Sub-Agenten laufen parallel
+```
+
 ## MCP
 
 ```python
@@ -127,6 +170,8 @@ mcp.close()
 | `examples/03_streaming_events.py` | EventBus, zwei Consumer, Stop-Knopf |
 | `examples/04_mcp.py` | Tools von einem MCP-Server |
 | `examples/05_memory.py` | Kurzzeit- + Langzeitgedächtnis |
+| `examples/06_coding_agent.py` | Coding-Tools + `update_plan` + Sandbox (FizzBuzz + Tests) |
+| `examples/07_parallel_subagents.py` | parallele Tool-Calls + Sub-Agents (Map-Reduce) |
 
 ## Tests
 

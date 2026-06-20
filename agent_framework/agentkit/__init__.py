@@ -18,10 +18,13 @@ Teilen — ohne unnötige Abstraktion:
 """
 
 from .agent import Agent, PLAN_PREAMBLE, REACT_PREAMBLE, to_assistant_dict
-from .events import (AgentEvent, CANCELLED, DONE, ERROR, EventBus, FINAL, STEP,
-                     TEXT_DELTA, TOOL_CALL, TOOL_RESULT)
+from .coding import CODING_SYSTEM, CodingTools, coding_tools
+from .events import (AgentEvent, CANCELLED, DONE, ERROR, EventBus, FINAL, PLAN,
+                     STEP, TEXT_DELTA, TOOL_CALL, TOOL_RESULT)
 from .llm import LLM, azure_from_env, openai_from_env
 from .memory import LongTermMemory, ShortTermMemory, count_tokens_text, truncate
+from .planning import Plan
+from .subagents import add_subagent
 from .tools import ToolRegistry
 
 __all__ = [
@@ -31,9 +34,15 @@ __all__ = [
     "azure_from_env", "openai_from_env",
     # Memory
     "ShortTermMemory", "LongTermMemory", "count_tokens_text", "truncate",
+    # Planning
+    "Plan",
+    # Coding-Tools
+    "CodingTools", "coding_tools", "CODING_SYSTEM",
+    # Sub-Agents
+    "add_subagent",
     # Events
     "AgentEvent", "EventBus",
-    "STEP", "TEXT_DELTA", "TOOL_CALL", "TOOL_RESULT", "FINAL", "ERROR",
+    "STEP", "TEXT_DELTA", "TOOL_CALL", "TOOL_RESULT", "PLAN", "FINAL", "ERROR",
     "CANCELLED", "DONE",
     # Prompts / Utils
     "REACT_PREAMBLE", "PLAN_PREAMBLE", "to_assistant_dict",

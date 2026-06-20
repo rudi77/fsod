@@ -19,6 +19,7 @@ Harness: max_steps, Retries, Fehlertoleranz, Compaction, kooperatives Abbrechen.
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Iterator, Optional
 
 from .events import (AgentEvent, CANCELLED, DONE, ERROR, FINAL, STEP,
@@ -53,7 +54,8 @@ class Agent:
     def __init__(self, llm, tools: Optional[ToolRegistry] = None,
                  system: Optional[str] = None, strategy: str = "react",
                  long_term=None, max_steps: int = 12, token_budget: int = 8000,
-                 memory: Optional[ShortTermMemory] = None):
+                 memory: Optional[ShortTermMemory] = None, parallel_tools: bool = True,
+                 plan=None):
         if strategy not in _PREAMBLES:
             raise ValueError(f"strategy muss eine von {list(_PREAMBLES)} sein, war '{strategy}'")
         self.llm = llm
@@ -61,6 +63,12 @@ class Agent:
         self.strategy = strategy
         self.max_steps = max_steps
         self.token_budget = token_budget
+        self.parallel_tools = parallel_tools
+
+        # Optionaler Plan (Todo-Liste) als update_plan-Tool.
+        self.plan = plan
+        if plan is not None:
+            plan.register_tool(self.tools)
 
         # Langzeitgedächtnis als Tools (remember/recall) einklinken.
         self.long_term = long_term
@@ -122,28 +130,48 @@ class Agent:
             if not tool_calls:
                 yield AgentEvent(FINAL, content)
                 return
+            if stopped():
+                yield AgentEvent(CANCELLED, {"where": "vor Tool-Aufruf"})
+                return
 
-            # 3) Alle angeforderten Tools ausführen (Fehler werden zum Ergebnis).
+            # 3) Tools ausführen. Mehrere Tool-Calls aus EINER Antwort werden
+            #    (optional) nebenläufig ausgeführt; Reihenfolge bleibt erhalten,
+            #    damit tool-Nachrichten zu ihren tool_call-IDs passen.
+            parsed = []
             for tc in tool_calls:
-                if stopped():
-                    yield AgentEvent(CANCELLED, {"where": "vor Tool-Aufruf"})
-                    return
                 name = tc["function"]["name"]
                 try:
                     args = json.loads(tc["function"]["arguments"] or "{}")
                 except json.JSONDecodeError:
                     args = {}
+                parsed.append((tc, name, args))
                 yield AgentEvent(TOOL_CALL, {"name": name, "args": args})
-                try:
-                    result = str(self.tools.call(name, args))
-                except Exception as e:  # Fehler ist auch ein Ergebnis -> Selbstkorrektur
-                    result = f"ERROR: {e}"
-                    yield AgentEvent(ERROR, {"name": name, "error": str(e)})
+
+            results = self._execute_tools(parsed)
+
+            for (tc, name, _args), (result, err) in zip(parsed, results):
+                if err is not None:  # Fehler ist auch ein Ergebnis -> Selbstkorrektur
+                    yield AgentEvent(ERROR, {"name": name, "error": err})
                 result = truncate(result)
                 yield AgentEvent(TOOL_RESULT, {"name": name, "result": result})
                 mem.add({"role": "tool", "tool_call_id": tc["id"], "content": result})
 
         yield AgentEvent(FINAL, "(max_steps erreicht)")
+
+    def _execute_tools(self, parsed):
+        """Führt die geparsten Tool-Calls aus -> Liste von (result, error).
+        Bei >1 Call und parallel_tools=True nebenläufig (Reihenfolge erhalten)."""
+        def run_one(item):
+            _tc, name, args = item
+            try:
+                return str(self.tools.call(name, args)), None
+            except Exception as e:
+                return f"ERROR: {e}", str(e)
+
+        if self.parallel_tools and len(parsed) > 1:
+            with ThreadPoolExecutor(max_workers=min(8, len(parsed))) as ex:
+                return list(ex.map(run_one, parsed))
+        return [run_one(it) for it in parsed]
 
     def _consume_stream(self, messages, should_stop):
         """Konsumiert den Streaming-Iterator: yieldet ('text', delta) pro Token
