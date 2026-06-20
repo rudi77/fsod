@@ -9,6 +9,9 @@ dependencies = [
     "python-dotenv>=1.0.0",
 ]
 
+[project.scripts]
+agentkit = "agentkit.cli:main"
+
 [project.optional-dependencies]
 tokens = ["tiktoken>=0.7.0"]
 mcp = ["mcp>=1.2.0"]

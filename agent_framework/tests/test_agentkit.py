@@ -312,6 +312,86 @@ def test_add_subagent_registers_delegate_tool():
     assert orch.call("delegate", {"auftrag": "Wien"}) == "Steckbrief Wien"
 
 
+# ---------------------------------------------------------------------- CLI
+def test_cli_run_task_renders_and_returns_final(capsys):
+    from agentkit import cli
+    cli.C.disable()  # keine ANSI-Codes im Test
+
+    agent = _agent_with_tool()
+    renderer = cli.Renderer()
+    final = cli.run_task(agent, "Was ist 2+3?", renderer)
+
+    out = capsys.readouterr().out
+    assert final == "Das Ergebnis ist 5."
+    assert "⏺ add" in out                 # Tool-Aufruf wurde gerendert
+    assert "Das Ergebnis ist 5." in out   # gestreamter Text wurde gerendert
+
+
+def test_cli_quiet_renderer_is_silent(capsys):
+    from agentkit import cli
+    cli.C.disable()
+
+    agent = _agent_with_tool()
+    final = cli.run_task(agent, "Was ist 2+3?", cli.Renderer(quiet=True))
+    out = capsys.readouterr().out
+    assert final == "Das Ergebnis ist 5."
+    assert out == ""  # im --print-Modus erscheint live nichts
+
+
+def test_cli_yes_flag_disables_shell_approval(tmp_path, monkeypatch):
+    # --yes -> CodingTools wird mit approval=False gebaut, der confirm_shell-Callback
+    # läuft also gar nicht erst (run_shell führt ohne Rückfrage aus).
+    from agentkit import cli
+    args = cli.build_parser().parse_args(["-y", "-w", str(tmp_path), "--provider", "openai"])
+    monkeypatch.setattr(cli, "build_llm", lambda provider: FakeLLM([]))  # kein echter LLM nötig
+    agent, *_ = cli.build_agent(args)
+    out = agent.tools.call("run_shell", {"command": "echo hi"})
+    assert "hi" in out and "ABGELEHNT" not in out
+
+
+def test_cli_build_llm_auto_without_creds_errors(monkeypatch):
+    from agentkit import cli
+    monkeypatch.delenv("AZURE_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    import pytest
+    with pytest.raises(SystemExit):
+        cli.build_llm("auto")
+
+
+def test_cli_handle_slash_tools_and_exit(capsys):
+    from agentkit import cli
+    cli.C.disable()
+    agent = _agent_with_tool()
+    reg = agent.tools
+    plan = Plan()
+
+    # /tools listet registrierte Tools, Session läuft weiter.
+    assert cli.handle_slash("/tools", agent, reg, plan, None) is True
+    assert "add" in capsys.readouterr().out
+    # /exit beendet die Session.
+    assert cli.handle_slash("/exit", agent, reg, plan, None) is False
+
+
+def test_cli_handle_slash_reset_keeps_system_message():
+    from agentkit import cli
+    agent = Agent(FakeLLM([]), strategy="plan", system="Sei knapp.")
+    # Unterhaltung anreichern, dann zurücksetzen.
+    agent.memory.add_user("hallo")
+    cli.handle_slash("/reset", agent, agent.tools, Plan(), None)
+    roles = [m["role"] for m in agent.memory.messages]
+    assert roles == ["system"]  # nur die System-Nachricht bleibt
+    assert "Plan-and-Execute" in agent.memory.messages[0]["content"]
+
+
+def test_cli_parser_defaults_and_oneshot():
+    from agentkit import cli
+    args = cli.build_parser().parse_args(["Schreibe", "fizzbuzz"])
+    assert args.prompt == ["Schreibe", "fizzbuzz"]
+    assert args.strategy == "react"
+    assert args.workspace == "./agent_workspace"
+    assert args.yes is False
+
+
 def test_subagent_forwards_events_to_shared_bus():
     bus = EventBus()
     q = bus.subscribe()
