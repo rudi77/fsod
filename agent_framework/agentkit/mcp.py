@@ -100,7 +100,7 @@ class MCPClient:
                 prefix + t.name,
                 t.description or "",
                 t.inputSchema or {"type": "object", "properties": {}},
-                (lambda server_name: (lambda **kw: self.call_tool(server_name, kw)))(t.name),
+                lambda sn=t.name, **kw: self.call_tool(sn, kw),  # sn= bindet den Tool-Namen pro Iteration
             )
         return self
 

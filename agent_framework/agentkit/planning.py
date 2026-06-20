@@ -54,6 +54,6 @@ class Plan:
                                    "enum": ["pending", "in_progress", "done"]},
                     }, "required": ["step", "status"]}}},
              "required": ["steps"]},
-            lambda steps: self.update(steps),
+            self.update,
         )
         return self

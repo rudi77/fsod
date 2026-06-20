@@ -221,31 +221,35 @@ class Agent:
         raise last
 
     # ------------------------------------------------------------- bequem
+    def _drive(self, task: str, cancel, handle: Callable[[AgentEvent], None]) -> str:
+        """Treibt run_iter an, reicht jedes Event an `handle` und gibt die finale
+        Antwort zurück. Gemeinsamer Kern von run() und run_on_bus()."""
+        final = "(keine Antwort)"
+        for ev in self.run_iter(task, cancel=cancel):
+            handle(ev)
+            if ev.type in (FINAL, CANCELLED):
+                final = ev.data if isinstance(ev.data, str) else "(abgebrochen)"
+        return final
+
     def run(self, task: str, cancel=None,
             on_event: Optional[Callable[[AgentEvent], None]] = None) -> str:
         """Arbeitet den Auftrag ab und gibt die finale Antwort als String zurück.
         `on_event` bekommt (optional) jedes Event zur Live-Anzeige."""
-        final = "(keine Antwort)"
-        for ev in self.run_iter(task, cancel=cancel):
-            if on_event:
-                on_event(ev)
-            if ev.type in (FINAL, CANCELLED):
-                final = ev.data if isinstance(ev.data, str) else "(abgebrochen)"
-        return final
+        return self._drive(task, cancel, on_event or (lambda ev: None))
 
     def run_on_bus(self, task: str, bus, task_id: int = -1, cancel=None,
                    source: str = "") -> str:
         """Arbeitet den Auftrag ab, publiziert jedes Event (mit `source`-Tag) auf
         einen EventBus und schließt mit einem DONE-Event. Gibt die finale Antwort
         zurück. Ideal für Worker-Threads, mehrere Consumer und Sub-Agent-Forwarding."""
+        def publish(ev: AgentEvent) -> None:
+            ev.task_id = task_id
+            ev.source = source
+            bus.publish(ev)
+
         final = "(keine Antwort)"
         try:
-            for ev in self.run_iter(task, cancel=cancel):
-                ev.task_id = task_id
-                ev.source = source
-                bus.publish(ev)
-                if ev.type in (FINAL, CANCELLED):
-                    final = ev.data if isinstance(ev.data, str) else "(abgebrochen)"
+            final = self._drive(task, cancel, publish)
         except Exception as e:
             bus.publish(AgentEvent(ERROR, {"error": str(e)}, task_id, source))
         bus.publish(AgentEvent(DONE, None, task_id, source))

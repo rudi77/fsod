@@ -127,7 +127,7 @@ class LongTermMemory:
             {"type": "object",
              "properties": {"text": {"type": "string", "description": "Die zu merkende Information."}},
              "required": ["text"]},
-            lambda text: self.remember(text),
+            self.remember,
         )
         registry.add(
             "recall",
@@ -135,5 +135,5 @@ class LongTermMemory:
             {"type": "object",
              "properties": {"query": {"type": "string", "description": "Wonach gesucht wird."}},
              "required": ["query"]},
-            lambda query: self.recall(query),
+            self.recall,
         )
