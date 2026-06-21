@@ -1,6 +1,6 @@
 # Benchmark: Rust vs. Python (agentkit)
 
-- Datum: 2026-06-20
+- Datum: 2026-06-21
 - Skala: 1.0
 - Plattform: Linux-6.18.5-x86_64-with-glibc2.39
 - Python: 3.11.15
@@ -10,11 +10,11 @@ beiden über denselben `len//4`-Fallback (kein tiktoken). Speedup = Python ÷ Ru
 
 | Szenario | Python (ns/op) | Rust (ns/op) | Speedup |
 |---|---:|---:|---:|
-| Agent-Loop (1 Tool + Antwort) | 17,629.7 | 6,369.6 | 2.8× |
-| 8 parallele Tool-Calls | 876,426.1 | 261,184.4 | 3.4× |
-| Tool-Dispatch (Registry.call) | 271.0 | 105.4 | 2.6× |
-| Token-Zählung (20 Msgs) | 2,028.6 | 430.0 | 4.7× |
-| Skill-Frontmatter parsen | 1,152.5 | 219.5 | 5.3× |
-| JSON dump+parse | 4,721.5 | 1,182.3 | 4.0× |
+| Agent-Loop (1 Tool + Antwort) | 23,298.5 | 6,098.6 | 3.8× |
+| 8 parallele Tool-Calls | 1,248,376.3 | 428,628.3 | 2.9× |
+| Tool-Dispatch (Registry.call) | 381.8 | 156.9 | 2.4× |
+| Token-Zählung (20 Msgs) | 3,254.6 | 610.2 | 5.3× |
+| Skill-Frontmatter parsen | 1,617.9 | 275.6 | 5.9× |
+| JSON dump+parse | 5,822.3 | 1,447.9 | 4.0× |
 
-**Geometrisches Mittel des Speedups: 3.6×**
+**Geometrisches Mittel des Speedups: 3.9×**
