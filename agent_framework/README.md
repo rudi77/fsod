@@ -40,6 +40,20 @@ cp .env.example .env           # mit Azure-OpenAI-Werten füllen
 Minimal reichen `openai` + `python-dotenv`; `tiktoken` (genaues Token-Zählen) und
 `mcp` (MCP-Server) sind optionale Extras.
 
+### Als Executable `agentkit` installieren
+
+Das Paket bringt einen Console-Script `agentkit` mit (One-shot + REPL):
+
+```bash
+pipx install ./agent_framework        # isoliert in den PATH (empfohlen)
+agentkit --demo "Was ist 17 + 25?"    # ohne API-Key: netzfreier Demo-Modus
+agentkit --repl                       # interaktiver Zeilen-REPL
+python -m agentkit "…"                # ohne Installation
+```
+
+Eigenständige Binary (PyInstaller) und plattformübergreifende Install-Skripte für
+Windows & Linux: siehe **[../INSTALL.md](../INSTALL.md)**.
+
 ## In 10 Zeilen
 
 ```python

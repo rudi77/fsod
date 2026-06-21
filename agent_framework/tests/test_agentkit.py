@@ -350,3 +350,38 @@ def test_subagent_forwards_events_to_shared_bus():
     assert any(e.type == DONE and e.source == "delegate:Wien" for e in seen)
     assert seen[-1].type == DONE and seen[-1].source == ""
     assert final == "Tabelle fertig"
+
+
+# -------------------------------------------------------------------- Demo/CLI
+from agentkit.demo import DemoLLM, demo_tools, _parse_addition, _parse_city  # noqa: E402
+
+
+def test_demo_parse_addition_and_city():
+    assert _parse_addition("Was ist 17 + 25?") == (17, 25)
+    assert _parse_addition("rechne 3+4") == (3, 4)
+    assert _parse_addition("kein plus hier") is None
+    assert _parse_city("Wie ist das Wetter in Berlin?") == "Berlin"
+    assert _parse_city("Wetter heute") is None
+
+
+def test_demo_agent_runs_tool_then_answers():
+    agent = Agent(DemoLLM(), tools=demo_tools(), strategy="plain")
+    assert "42" in agent.run("Was ist 17 + 25?")
+
+
+def test_demo_agent_handles_weather():
+    agent = Agent(DemoLLM(), tools=demo_tools(), strategy="plain")
+    assert "graz" in agent.run("Wie ist das Wetter in Graz?").lower()
+
+
+def test_demo_agent_plain_reply_without_tool():
+    agent = Agent(DemoLLM(), tools=demo_tools(), strategy="plain")
+    assert "Demo-Modus" in agent.run("Hallo!")
+
+
+def test_cli_one_shot_demo(capsys):
+    from agentkit.cli import main
+
+    rc = main(["--demo", "Was ist 17 + 25?"])
+    assert rc == 0
+    assert "42" in capsys.readouterr().out
