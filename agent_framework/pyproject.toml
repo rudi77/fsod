@@ -13,7 +13,14 @@ dependencies = [
 tokens = ["tiktoken>=0.7.0"]
 mcp = ["mcp>=1.2.0"]
 dev = ["pytest>=8.0.0"]
+# Für das Bauen einer eigenständigen Executable (siehe scripts/build_pyinstaller.*).
+build = ["pyinstaller>=6.0.0"]
 all = ["tiktoken>=0.7.0", "mcp>=1.2.0", "pytest>=8.0.0"]
+
+# Die installierbare Executable: `pip install .` / `pipx install .` legt `agentkit`
+# in den PATH; `python -m agentkit` geht ebenso (siehe agentkit/__main__.py).
+[project.scripts]
+agentkit = "agentkit.cli:main"
 
 [build-system]
 requires = ["setuptools>=68"]
