@@ -65,6 +65,12 @@ class Agent:
         self.token_budget = token_budget
         self.parallel_tools = parallel_tools
 
+        # Aktueller Lauf-Kontext (von run_on_bus gesetzt). Sub-Agent-Tools lesen
+        # hier den aktiven EventBus + Stop-Knopf, um ihre Events live in denselben
+        # Bus weiterzuleiten (getaggt mit ihrer source) — siehe roles.add_task_tool.
+        self._bus = None
+        self._cancel = None
+
         # Optionaler Plan (Todo-Liste) als update_plan-Tool.
         self.plan = plan
         if plan is not None:
@@ -247,6 +253,11 @@ class Agent:
         """Arbeitet den Auftrag ab, publiziert jedes Event (mit `source`-Tag) auf
         einen EventBus und schließt mit einem DONE-Event. Gibt die finale Antwort
         zurück. Ideal für Worker-Threads, mehrere Consumer und Sub-Agent-Forwarding."""
+        # Lauf-Kontext merken, damit Sub-Agent-Tools (z. B. das `task`-Tool) ihre
+        # Events in DIESEN Bus weiterleiten und denselben Stop-Knopf erben können.
+        self._bus = bus
+        self._cancel = cancel
+
         def publish(ev: AgentEvent) -> None:
             ev.task_id = task_id
             ev.source = source

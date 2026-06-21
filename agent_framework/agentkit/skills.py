@@ -59,6 +59,20 @@ def parse_frontmatter(text: str) -> dict:
     return meta
 
 
+def body_after_frontmatter(text: str) -> str:
+    """Gibt den Markdown-Body NACH dem schließenden '---' zurück (= die Anleitung).
+
+    Gegenstück zu `parse_frontmatter`: das eine liest die Metadaten, das andere den
+    Rumpf. Praktisch für Datei-Agenten, deren Body der System-Prompt ist (roles.py)."""
+    if not text.startswith("---"):
+        return text
+    end = text.find("\n---", 3)
+    if end == -1:
+        return text
+    nl = text.find("\n", end + 1)  # Zeilenende der schließenden '---'-Zeile
+    return text[nl + 1:] if nl != -1 else ""
+
+
 class Skills:
     """Entdeckt Skills (Ordner mit `SKILL.md`) und bietet sie dem Agenten als Tools an."""
 

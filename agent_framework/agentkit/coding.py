@@ -13,7 +13,11 @@ from __future__ import annotations
 import os
 import subprocess
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Optional, Sequence
+
+# Read-only-Teilmenge der Coding-Tools (kein write/edit/run_shell). Praktisch für
+# Sub-Agenten-Rollen, die nur erkunden oder begutachten dürfen (siehe roles.py).
+READ_ONLY_TOOLS = ("list_files", "glob_files", "grep", "read_file")
 
 CODING_SYSTEM = (
     "Du bist ein Coding-Agent und arbeitest im aktuellen Projektverzeichnis "
@@ -141,42 +145,51 @@ class CodingTools:
         out = f"exit={r.returncode}\n--- STDOUT ---\n{r.stdout}\n--- STDERR ---\n{r.stderr}"
         return out[:4000]
 
-    def register(self, registry) -> "CodingTools":
-        registry.add("list_files", "Listet Dateien in einem Verzeichnis der Sandbox.",
-                     {"type": "object", "properties": {"path": {"type": "string"}}, "required": []},
-                     self.list_files)
-        registry.add("glob_files", "Findet Dateien per Glob-Muster (z. B. '**/*.py'). Read-only, keine Rückfrage.",
-                     {"type": "object", "properties": {
-                         "pattern": {"type": "string", "description": "Glob-Muster, z. B. '**/*.py' oder 'src/*.ts'."},
-                         "path": {"type": "string", "description": "Startverzeichnis (Default '.')."}},
-                      "required": ["pattern"]},
-                     self.glob_files)
-        registry.add("grep", "Durchsucht Dateiinhalte per Regex und gibt 'pfad:zeile: text' zurück. Read-only.",
-                     {"type": "object", "properties": {
-                         "pattern": {"type": "string", "description": "Regex-Suchmuster."},
-                         "path": {"type": "string", "description": "Startverzeichnis (Default '.')."},
-                         "glob": {"type": "string", "description": "Auf diese Dateien beschränken, z. B. '**/*.py'."}},
-                      "required": ["pattern"]},
-                     self.grep)
-        registry.add("read_file", "Liest eine Datei aus der Sandbox.",
-                     {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]},
-                     self.read_file)
-        registry.add("write_file", "Schreibt Text in eine Datei in der Sandbox.",
-                     {"type": "object", "properties": {
-                         "path": {"type": "string"}, "content": {"type": "string"}},
-                      "required": ["path", "content"]},
-                     self.write_file)
-        registry.add("edit_file", "Ersetzt einen eindeutigen Textabschnitt in einer Datei.",
-                     {"type": "object", "properties": {
-                         "path": {"type": "string"},
-                         "old": {"type": "string", "description": "Zu ersetzender Text (eindeutig)."},
-                         "new": {"type": "string", "description": "Neuer Text."}},
-                      "required": ["path", "old", "new"]},
-                     self.edit_file)
-        registry.add("run_shell", "Führt einen Shell-Befehl in der Sandbox aus (z. B. 'python ...', 'pytest').",
-                     {"type": "object", "properties": {"command": {"type": "string"}},
-                      "required": ["command"]},
-                     self.run_shell)
+    def register(self, registry, only: Optional[Sequence[str]] = None) -> "CodingTools":
+        """Registriert die Coding-Tools in `registry`.
+
+        `only` beschränkt auf die genannten Tool-Namen (z. B. `READ_ONLY_TOOLS`
+        für eine read-only-Sub-Agenten-Rolle); None = alle Tools.
+        """
+        def add(name, *args):
+            if only is None or name in only:
+                registry.add(name, *args)
+
+        add("list_files", "Listet Dateien in einem Verzeichnis der Sandbox.",
+            {"type": "object", "properties": {"path": {"type": "string"}}, "required": []},
+            self.list_files)
+        add("glob_files", "Findet Dateien per Glob-Muster (z. B. '**/*.py'). Read-only, keine Rückfrage.",
+            {"type": "object", "properties": {
+                "pattern": {"type": "string", "description": "Glob-Muster, z. B. '**/*.py' oder 'src/*.ts'."},
+                "path": {"type": "string", "description": "Startverzeichnis (Default '.')."}},
+             "required": ["pattern"]},
+            self.glob_files)
+        add("grep", "Durchsucht Dateiinhalte per Regex und gibt 'pfad:zeile: text' zurück. Read-only.",
+            {"type": "object", "properties": {
+                "pattern": {"type": "string", "description": "Regex-Suchmuster."},
+                "path": {"type": "string", "description": "Startverzeichnis (Default '.')."},
+                "glob": {"type": "string", "description": "Auf diese Dateien beschränken, z. B. '**/*.py'."}},
+             "required": ["pattern"]},
+            self.grep)
+        add("read_file", "Liest eine Datei aus der Sandbox.",
+            {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]},
+            self.read_file)
+        add("write_file", "Schreibt Text in eine Datei in der Sandbox.",
+            {"type": "object", "properties": {
+                "path": {"type": "string"}, "content": {"type": "string"}},
+             "required": ["path", "content"]},
+            self.write_file)
+        add("edit_file", "Ersetzt einen eindeutigen Textabschnitt in einer Datei.",
+            {"type": "object", "properties": {
+                "path": {"type": "string"},
+                "old": {"type": "string", "description": "Zu ersetzender Text (eindeutig)."},
+                "new": {"type": "string", "description": "Neuer Text."}},
+             "required": ["path", "old", "new"]},
+            self.edit_file)
+        add("run_shell", "Führt einen Shell-Befehl in der Sandbox aus (z. B. 'python ...', 'pytest').",
+            {"type": "object", "properties": {"command": {"type": "string"}},
+             "required": ["command"]},
+            self.run_shell)
         return self
 
 

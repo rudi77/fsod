@@ -24,6 +24,8 @@ from .events import (AgentEvent, CANCELLED, DONE, ERROR, EventBus, FINAL, PLAN,
 from .llm import LLM, azure_from_env, openai_from_env
 from .memory import LongTermMemory, ShortTermMemory, count_tokens_text, truncate
 from .planning import Plan
+from .roles import (AgentRole, ROLES, SUBAGENT_SYSTEM, add_task_tool,
+                    load_roles_from_dir)
 from .skills import SKILL_SYSTEM, Skills, skills_tools
 from .subagents import add_subagent
 from .tools import ToolRegistry
@@ -43,6 +45,7 @@ __all__ = [
     "Skills", "skills_tools", "SKILL_SYSTEM",
     # Sub-Agents
     "add_subagent",
+    "AgentRole", "ROLES", "SUBAGENT_SYSTEM", "add_task_tool", "load_roles_from_dir",
     # Events
     "AgentEvent", "EventBus",
     "STEP", "TEXT_DELTA", "TOOL_CALL", "TOOL_RESULT", "PLAN", "FINAL", "ERROR",

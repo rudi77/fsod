@@ -31,6 +31,7 @@ from .coding import CODING_SYSTEM, CodingTools
 from .events import (CANCELLED, DONE, ERROR, EventBus, FINAL, PLAN, STEP,
                      TEXT_DELTA, TOOL_CALL, TOOL_RESULT)
 from .memory import LongTermMemory, ShortTermMemory
+from .roles import ROLES, SUBAGENT_SYSTEM, add_task_tool, load_roles_from_dir
 from .skills import SKILL_SYSTEM, Skills
 from .planning import Plan
 from .tools import ToolRegistry
@@ -138,23 +139,34 @@ class Renderer:
     def handle(self, ev) -> None:
         if self.quiet:
             return
-        if ev.type == STEP:
-            if self.show_steps:
-                self._end_stream()
-                print(f"{C.GRAY}— Schritt {ev.data['step']} —{C.RESET}")
+        src = ev.source  # "" = Haupt-Agent; bei Sub-Agenten z. B. "explorer:…"
 
-        elif ev.type == TEXT_DELTA:
+        # TEXT_DELTA zuerst (höchste Frequenz, ein Event pro Token): kein Tag-Aufbau.
+        if ev.type == TEXT_DELTA:
+            if src:
+                return  # Sub-Agenten nicht Token-für-Token streamen (würde verschränkt unleserlich)
             if not self._streaming:
                 self._streaming = True
             print(ev.data, end="", flush=True)
+            return
+
+        # Seltenere Events: hier lohnt sich das `source`-Tag, das (auch parallele)
+        # Sub-Agenten in der Anzeige auseinanderhält.
+        tag = f"{C.GRAY}[{src.split(':', 1)[0]}]{C.RESET} " if src else ""
+
+        if ev.type == STEP:
+            if self.show_steps:
+                self._end_stream()
+                print(f"{tag}{C.GRAY}— Schritt {ev.data['step']} —{C.RESET}")
 
         elif ev.type == TOOL_CALL:
             self._end_stream()
-            print(f"{C.CYAN}{G.TOOL} {C.BOLD}{ev.data['name']}{C.RESET}"
+            print(f"{tag}{C.CYAN}{G.TOOL} {C.BOLD}{ev.data['name']}{C.RESET}"
                   f"{C.GRAY}({_fmt_args(ev.data['args'])}){C.RESET}", flush=True)
 
         elif ev.type == TOOL_RESULT:
-            self._print_result(ev.data["result"])
+            self._end_stream()
+            self._print_result(ev.data["result"], tag=tag)
 
         elif ev.type == PLAN:
             self._end_stream()
@@ -165,7 +177,7 @@ class Renderer:
         elif ev.type == ERROR:
             self._end_stream()
             name = ev.data.get("name", "?")
-            print(f"{C.RED}{G.ERROR} Fehler in {name}: {ev.data.get('error')}{C.RESET}", flush=True)
+            print(f"{tag}{C.RED}{G.ERROR} Fehler in {name}: {ev.data.get('error')}{C.RESET}", flush=True)
 
         elif ev.type == CANCELLED:
             self._end_stream()
@@ -174,14 +186,14 @@ class Renderer:
         elif ev.type == FINAL:
             self._end_stream()
 
-    def _print_result(self, result: str, max_lines: int = 6) -> None:
+    def _print_result(self, result: str, max_lines: int = 6, tag: str = "") -> None:
         """Tool-Ergebnis eingerückt und auf wenige Zeilen gekürzt anzeigen."""
         lines = (result or "").splitlines() or ["(leer)"]
         shown = lines[:max_lines]
         for line in shown:
-            print(f"{C.GRAY}  {G.RESULT} {_abbrev(line, 100)}{C.RESET}")
+            print(f"{tag}{C.GRAY}  {G.RESULT} {_abbrev(line, 100)}{C.RESET}")
         if len(lines) > max_lines:
-            print(f"{C.GRAY}  {G.RESULT} …(+{len(lines) - max_lines} Zeilen){C.RESET}")
+            print(f"{tag}{C.GRAY}  {G.RESULT} …(+{len(lines) - max_lines} Zeilen){C.RESET}")
 
 
 # ------------------------------------------------------------------ Approval
@@ -215,8 +227,11 @@ def build_llm(provider: str):
     return (azure_from_env() if provider == "azure" else openai_from_env())
 
 
-def build_agent(args) -> tuple[Agent, ToolRegistry, Plan, Skills | None]:
-    """Stellt einen Coding-fähigen Agenten zusammen (Tools + Plan + optional Skills/Memory)."""
+def build_agent(args) -> tuple[Agent, ToolRegistry, Plan, Skills | None, dict]:
+    """Stellt einen Coding-fähigen Agenten zusammen (Tools + Plan + optional Skills/Memory).
+
+    Gibt zusätzlich das aktive Rollen-Dict zurück (eingebaute `ROLES` + ggf. via
+    `--agents` geladene Custom-Rollen) — für die Anzeige in `/agents`."""
     llm = build_llm(args.provider)
 
     tools = ToolRegistry()
@@ -226,16 +241,32 @@ def build_agent(args) -> tuple[Agent, ToolRegistry, Plan, Skills | None]:
     skills = Skills(args.skills) if args.skills else None
     long_term = LongTermMemory(args.memory) if args.memory else None
 
-    # System-Prompt: Coding-Basis, um Skill-Hinweis ergänzt, wenn Skills aktiv sind.
+    # System-Prompt: Coding-Basis, um Skill- und Sub-Agent-Hinweis ergänzt.
     system = CODING_SYSTEM
     if skills is not None:
-        system = CODING_SYSTEM + "\n\n" + SKILL_SYSTEM
+        system = system + "\n\n" + SKILL_SYSTEM
+    subagents = not args.no_subagents
+    if subagents:
+        system = system + "\n\n" + SUBAGENT_SYSTEM
+
+    # Aktive Rollen: eingebaute + ggf. Custom-Rollen aus `--agents <ordner>`
+    # (gleichnamige Dateien überschreiben die Defaults).
+    roles = dict(ROLES)
+    if args.agents:
+        roles.update(load_roles_from_dir(args.agents))
 
     plan = Plan()  # Render erfolgt über das PLAN-Event im Renderer
     agent = Agent(llm, tools=tools, system=system, strategy=args.strategy,
                   plan=plan, skills=skills, long_term=long_term,
                   max_steps=args.max_steps)
-    return agent, tools, plan, skills
+
+    # Das `task`-Tool nach dem Agent registrieren — der Closure braucht den
+    # Orchestrator-Agent (für seinen Lauf-Kontext/Bus). Es schreibt in dieselbe
+    # `tools`-Registry, die der Agent hält.
+    if subagents:
+        add_task_tool(tools, agent=agent, llm=llm, workspace=args.workspace,
+                      approval=not args.yes, approve=confirm_shell, roles=roles)
+    return agent, tools, plan, skills, roles
 
 
 # ------------------------------------------------------------------ Ausführen
@@ -257,8 +288,8 @@ def run_task(agent: Agent, task: str, renderer: Renderer) -> str:
     while True:
         try:
             ev = q.get()           # Ctrl-C kann hier ODER im handle() unten landen
-            if ev.type == DONE:
-                break
+            if ev.type == DONE and not ev.source:
+                break              # nur das Root-DONE beendet die UI; Sub-Agent-DONEs ignorieren
             renderer.handle(ev)
         except KeyboardInterrupt:
             if interrupted:        # zweites Ctrl-C: durchreichen -> Programmende
@@ -282,13 +313,14 @@ def help_text() -> str:
   {C.CYAN}/plan{C.RESET}      aktuellen Plan zeigen
   {C.CYAN}/tools{C.RESET}     registrierte Tools auflisten
   {C.CYAN}/skills{C.RESET}    verfügbare Skills auflisten
+  {C.CYAN}/agents{C.RESET}    verfügbare Sub-Agent-Rollen (task-Tool) auflisten
   {C.CYAN}/exit{C.RESET}      beenden (auch /quit, Ctrl-D)
 
 Sonst: einfach eine Aufgabe eintippen. Ctrl-C bricht die laufende Aufgabe ab."""
 
 
 def handle_slash(cmd: str, agent: Agent, tools: ToolRegistry,
-                 plan: Plan, skills: Skills | None) -> bool:
+                 plan: Plan, skills: Skills | None, roles: dict | None = None) -> bool:
     """Bearbeitet einen /Befehl. Gibt False zurück, wenn die Session enden soll."""
     name = cmd[1:].strip().lower()
     if name in ("exit", "quit", "q"):
@@ -305,6 +337,14 @@ def handle_slash(cmd: str, agent: Agent, tools: ToolRegistry,
         print(f"{C.MAGENTA}{plan.render()}{C.RESET}")
     elif name == "tools":
         print(f"{C.BOLD}Tools:{C.RESET} " + ", ".join(tools.names()))
+    elif name == "agents":
+        if "task" not in tools.names():
+            print(f"{C.GRAY}(Sub-Agenten deaktiviert — ohne --no-subagents starten){C.RESET}")
+        else:
+            print(f"{C.BOLD}Sub-Agent-Rollen (task subagent_type=…):{C.RESET}")
+            print(f"  {C.CYAN}general{C.RESET} — beliebige abgegrenzte Teilaufgabe (voller Coding-Zugriff)")
+            for r in (roles or ROLES).values():
+                print(f"  {C.CYAN}{r.name}{C.RESET} — {r.description}")
     elif name == "skills":
         if skills is None:
             print(f"{C.GRAY}(keine Skills aktiv — mit --skills <ordner> starten){C.RESET}")
@@ -347,7 +387,7 @@ def banner(args) -> str:
     return "\n".join(out)
 
 
-def repl(agent, tools, plan, skills, renderer) -> None:
+def repl(agent, tools, plan, skills, roles, renderer) -> None:
     """Die interaktive Session: Eingabe lesen, Slash-Befehle oder Aufgabe abarbeiten."""
     while True:
         try:
@@ -358,7 +398,7 @@ def repl(agent, tools, plan, skills, renderer) -> None:
         if not user:
             continue
         if user.startswith("/"):
-            if not handle_slash(user, agent, tools, plan, skills):
+            if not handle_slash(user, agent, tools, plan, skills, roles):
                 print(f"{C.GRAY}Tschüss.{C.RESET}")
                 return
             continue
@@ -378,11 +418,15 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Agenten-Strategie (Default: react).")
     p.add_argument("--skills", metavar="DIR", default=None,
                    help="Skills-Verzeichnis aktivieren (SKILL.md-Ordner).")
+    p.add_argument("--agents", metavar="DIR", default=None,
+                   help="Custom-Sub-Agenten aus *.md-Dateien laden (subagent_type fürs task-Tool).")
     p.add_argument("--memory", metavar="FILE", default=None,
                    help="Langzeitgedächtnis-Datei (JSONL) für remember/recall.")
     p.add_argument("--provider", default="auto", choices=["auto", "azure", "openai"],
                    help="LLM-Provider (Default: auto — aus der .env erraten).")
     p.add_argument("--max-steps", type=int, default=160, help="Max. Loop-Schritte pro Aufgabe.")
+    p.add_argument("--no-subagents", action="store_true",
+                   help="Das 'task'-Tool (Delegation an Sub-Agenten) deaktivieren.")
     p.add_argument("-y", "--yes", action="store_true",
                    help="Shell-Befehle ohne Rückfrage ausführen (Vorsicht!).")
     p.add_argument("--steps", action="store_true", help="Schritt-Grenzen mit anzeigen.")
@@ -408,7 +452,7 @@ def main(argv=None) -> int:
     else:
         _enable_colors()
 
-    agent, tools, plan, skills = build_agent(args)
+    agent, tools, plan, skills, roles = build_agent(args)
     renderer = Renderer(show_steps=args.steps, quiet=args.print_mode)
 
     task = " ".join(args.prompt).strip()
@@ -426,7 +470,7 @@ def main(argv=None) -> int:
 
     # Interaktive Session.
     print(banner(args))
-    repl(agent, tools, plan, skills, renderer)
+    repl(agent, tools, plan, skills, roles, renderer)
     return 0
 
 
