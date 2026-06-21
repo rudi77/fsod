@@ -1,4 +1,4 @@
-"""Erlaubt `python -m agentkit` als Alias für die CLI."""
+"""Erlaubt `python -m agentkit` als Einstieg in die CLI."""
 
 from .cli import main
 

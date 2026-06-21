@@ -11,8 +11,11 @@ from types import SimpleNamespace
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from agentkit import (Agent, AgentEvent, CodingTools, EventBus,  # noqa: E402
-                      LongTermMemory, Plan, ShortTermMemory, Skills, ToolRegistry,
-                      add_subagent, coding_tools, skills_tools)
+                      LongTermMemory, Plan, ROLES, ShortTermMemory, Skills,
+                      ToolRegistry, add_subagent, add_task_tool, coding_tools,
+                      skills_tools)
+from agentkit.coding import READ_ONLY_TOOLS  # noqa: E402
+from agentkit.roles import load_roles_from_dir  # noqa: E402
 from agentkit.events import DONE, FINAL, TOOL_CALL, TOOL_RESULT  # noqa: E402
 from agentkit.mcp import mcp_tools_to_schemas  # noqa: E402
 
@@ -217,6 +220,24 @@ def test_coding_tools_sandbox_and_io(tmp_path):
         reg.call("read_file", {"path": "../../etc/passwd"})
 
 
+def test_coding_tools_glob_and_grep(tmp_path):
+    reg = coding_tools(workspace=str(tmp_path), approval=False)
+    reg.call("write_file", {"path": "src/app.py", "content": "def hello():\n    return 42\n"})
+    reg.call("write_file", {"path": "src/util.py", "content": "x = 1\n"})
+    reg.call("write_file", {"path": "README.md", "content": "# Doku\n"})
+    # glob_files: nur Python-Dateien, plattformneutrale '/'-Pfade
+    py = reg.call("glob_files", {"pattern": "**/*.py"})
+    assert "src/app.py" in py and "src/util.py" in py and "README.md" not in py
+    # grep: findet Inhalt mit Pfad:Zeile
+    hit = reg.call("grep", {"pattern": "return", "glob": "**/*.py"})
+    assert "src/app.py:2:" in hit and "return 42" in hit
+    # Ignore-Ordner werden übersprungen
+    reg.call("write_file", {"path": ".git/config.py", "content": "return 99\n"})
+    assert ".git" not in reg.call("grep", {"pattern": "return"})
+    # Ungültiges Regex -> Fehlertext statt Crash
+    assert "ERROR" in reg.call("grep", {"pattern": "([unbalanced"})
+
+
 def test_coding_tools_run_shell_no_approval(tmp_path):
     reg = coding_tools(workspace=str(tmp_path), approval=False)
     out = reg.call("run_shell", {"command": "echo hallo"})
@@ -302,6 +323,122 @@ def test_parallel_tools_preserve_order_and_pairing():
     assert [m["tool_call_id"] for m in tool_msgs] == ["t0", "t1", "t2"]
 
 
+def test_coding_register_only_subset(tmp_path):
+    # only= beschränkt auf eine Tool-Teilmenge (read-only -> kein write/edit/shell).
+    reg = ToolRegistry()
+    CodingTools(workspace=str(tmp_path), approval=False).register(reg, only=READ_ONLY_TOOLS)
+    names = set(reg.names())
+    assert names == set(READ_ONLY_TOOLS)
+    assert "write_file" not in names and "run_shell" not in names
+
+
+def test_roles_presets_have_expected_tool_subsets():
+    assert set(ROLES) == {"explorer", "reviewer", "tester"}
+    assert ROLES["explorer"].tools == READ_ONLY_TOOLS      # read-only
+    assert ROLES["reviewer"].tools == READ_ONLY_TOOLS      # read-only
+    assert "run_shell" in ROLES["tester"].tools            # tester darf Tests ausführen
+    assert "write_file" not in ROLES["tester"].tools       # aber keinen Code schreiben
+
+
+def test_add_task_tool_registers_and_delegates(tmp_path):
+    # Ohne aktiven Bus (Library-Nutzung) gibt das task-Tool nur das Sub-Ergebnis zurück.
+    sub_llm = FakeLLM([[_chunk(content="Architektur-Überblick")]])
+    orchestrator = Agent(FakeLLM([]), strategy="plain")
+    add_task_tool(orchestrator.tools, agent=orchestrator, llm=sub_llm,
+                  workspace=str(tmp_path), approval=False)
+    assert orchestrator.tools.has("task")
+    # Schema bietet subagent_type als Enum (Rollen + general) an.
+    schema = next(s for s in orchestrator.tools.schemas() if s["function"]["name"] == "task")
+    enum = schema["function"]["parameters"]["properties"]["subagent_type"]["enum"]
+    assert "explorer" in enum and "general" in enum
+    out = orchestrator.tools.call("task", {"subagent_type": "explorer", "prompt": "Erkunde es"})
+    assert out == "Architektur-Überblick"
+
+
+def test_task_tool_forwards_subagent_events_to_active_bus(tmp_path):
+    bus = EventBus()
+    q = bus.subscribe()
+
+    sub_llm = FakeLLM([[_chunk(content="explorer fertig")]])
+    orch_llm = FakeLLM([
+        [_chunk(tool={"id": "t0", "name": "task",
+                      "arguments": '{"subagent_type": "explorer", "prompt": "Erkunde"}'})],
+        [_chunk(content="Bericht fertig")],
+    ])
+    orchestrator = Agent(orch_llm, strategy="plain")
+    add_task_tool(orchestrator.tools, agent=orchestrator, llm=sub_llm,
+                  workspace=str(tmp_path), approval=False)
+
+    final = orchestrator.run_on_bus("Erkunde das Repo.", bus, source="")
+
+    seen = []
+    while not q.empty():
+        seen.append(q.get_nowait())
+
+    # Sub-Agent-Events sind mit der Rolle getaggt; der Orchestrator mit "".
+    assert any(e.source.startswith("explorer:") for e in seen)
+    sub_finals = [e for e in seen if e.source.startswith("explorer:") and e.type == FINAL]
+    assert sub_finals and sub_finals[0].data == "explorer fertig"
+    # Der Orchestrator bekommt das Sub-Ergebnis als Tool-Ergebnis; Root-DONE trägt source="".
+    tool_results = [e for e in seen if e.source == "" and e.type == TOOL_RESULT]
+    assert tool_results[0].data["result"] == "explorer fertig"
+    assert seen[-1].type == DONE and seen[-1].source == ""
+    assert final == "Bericht fertig"
+
+
+def _write_agent_md(root, filename, frontmatter, body):
+    root.mkdir(parents=True, exist_ok=True)
+    fm = "\n".join(f"{k}: {v}" for k, v in frontmatter.items())
+    (root / filename).write_text(f"---\n{fm}\n---\n\n{body}\n", encoding="utf-8")
+
+
+def test_load_roles_from_dir_parses_frontmatter_and_body(tmp_path):
+    _write_agent_md(tmp_path, "security-reviewer.md",
+                    {"name": "security-reviewer",
+                     "description": "Security-Review.", "tools": "read_only"},
+                    "Du bist ein Security-Reviewer. GEHEIMER PROMPT-BODY.")
+    _write_agent_md(tmp_path, "doc-writer.md",
+                    {"name": "doc-writer", "description": "Schreibt Doku.",
+                     "tools": "read_file, write_file", "strategy": "plan"},
+                    "Du schreibst Dokumentation.")
+
+    roles = load_roles_from_dir(str(tmp_path))
+    assert set(roles) == {"security-reviewer", "doc-writer"}
+    sec = roles["security-reviewer"]
+    assert sec.tools == READ_ONLY_TOOLS                  # 'read_only'-Kürzel
+    assert "GEHEIMER PROMPT-BODY" in sec.system          # Body = System-Prompt
+    assert sec.strategy == "react"                       # Default
+    doc = roles["doc-writer"]
+    assert doc.tools == ("read_file", "write_file")      # explizite Liste
+    assert doc.strategy == "plan"
+    # Fehlender Ordner -> leeres Dict, kein Crash.
+    assert load_roles_from_dir(str(tmp_path / "gibtsnicht")) == {}
+
+
+def test_load_roles_without_tools_field_means_all_tools(tmp_path):
+    _write_agent_md(tmp_path, "general-helper.md",
+                    {"name": "general-helper", "description": "Alles."},
+                    "Du hilfst bei allem.")
+    role = load_roles_from_dir(str(tmp_path))["general-helper"]
+    assert role.tools is None  # None = alle Coding-Tools
+
+
+def test_cli_agents_flag_merges_custom_roles(tmp_path, monkeypatch):
+    from agentkit import cli
+    _write_agent_md(tmp_path, "security-reviewer.md",
+                    {"name": "security-reviewer", "description": "Security.", "tools": "read_only"},
+                    "Du bist ein Security-Reviewer.")
+    args = cli.build_parser().parse_args(
+        ["-w", str(tmp_path), "--agents", str(tmp_path), "--provider", "openai"])
+    monkeypatch.setattr(cli, "build_llm", lambda *a, **k: (FakeLLM([]), "openai"))
+    agent, tools, plan, skills, roles = cli.build_agent(args)
+    # Eingebaute + Custom-Rolle sind aktiv.
+    assert "security-reviewer" in roles and "explorer" in roles
+    # Custom-Typ steht im task-Schema-Enum (also für das Modell wählbar).
+    schema = next(s for s in tools.schemas() if s["function"]["name"] == "task")
+    assert "security-reviewer" in schema["function"]["parameters"]["properties"]["subagent_type"]["enum"]
+
+
 def test_add_subagent_registers_delegate_tool():
     orch = ToolRegistry()
     # Sub-Agent gibt einfach "fertig" zurück.
@@ -310,6 +447,88 @@ def test_add_subagent_registers_delegate_tool():
                  system="Recherche.", strategy="plain")
     assert orch.has("delegate")
     assert orch.call("delegate", {"auftrag": "Wien"}) == "Steckbrief Wien"
+
+
+# ---------------------------------------------------------------------- CLI
+def test_cli_run_task_renders_and_returns_final(capsys):
+    from agentkit import cli
+    cli.C.disable()  # keine ANSI-Codes im Test
+
+    agent = _agent_with_tool()
+    renderer = cli.Renderer()
+    final = cli.run_task(agent, "Was ist 2+3?", renderer)
+
+    out = capsys.readouterr().out
+    assert final == "Das Ergebnis ist 5."
+    assert "⏺ add" in out                 # Tool-Aufruf wurde gerendert
+    assert "Das Ergebnis ist 5." in out   # gestreamter Text wurde gerendert
+
+
+def test_cli_quiet_renderer_is_silent(capsys):
+    from agentkit import cli
+    cli.C.disable()
+
+    agent = _agent_with_tool()
+    final = cli.run_task(agent, "Was ist 2+3?", cli.Renderer(quiet=True))
+    out = capsys.readouterr().out
+    assert final == "Das Ergebnis ist 5."
+    assert out == ""  # im --print-Modus erscheint live nichts
+
+
+def test_cli_yes_flag_disables_shell_approval(tmp_path, monkeypatch):
+    # --yes -> CodingTools wird mit approval=False gebaut, der confirm_shell-Callback
+    # läuft also gar nicht erst (run_shell führt ohne Rückfrage aus).
+    from agentkit import cli
+    args = cli.build_parser().parse_args(["-y", "-w", str(tmp_path), "--provider", "openai"])
+    monkeypatch.setattr(cli, "build_llm", lambda *a, **k: (FakeLLM([]), "openai"))  # kein echter LLM nötig
+    agent, *_ = cli.build_agent(args)
+    out = agent.tools.call("run_shell", {"command": "echo hi"})
+    assert "hi" in out and "ABGELEHNT" not in out
+
+
+def test_cli_build_llm_auto_without_creds_falls_back_to_demo(monkeypatch):
+    # Ohne Zugangsdaten fällt 'auto' auf den netzfreien Demo-LLM zurück (kein Crash),
+    # damit die installierte Executable sofort läuft.
+    from agentkit import cli
+    from agentkit.demo import DemoLLM
+    monkeypatch.delenv("AZURE_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    llm, label = cli.build_llm("auto")
+    assert isinstance(llm, DemoLLM) and label.startswith("demo")
+
+
+def test_cli_handle_slash_tools_and_exit(capsys):
+    from agentkit import cli
+    cli.C.disable()
+    agent = _agent_with_tool()
+    reg = agent.tools
+    plan = Plan()
+
+    # /tools listet registrierte Tools, Session läuft weiter.
+    assert cli.handle_slash("/tools", agent, reg, plan, None) is True
+    assert "add" in capsys.readouterr().out
+    # /exit beendet die Session.
+    assert cli.handle_slash("/exit", agent, reg, plan, None) is False
+
+
+def test_cli_handle_slash_reset_keeps_system_message():
+    from agentkit import cli
+    agent = Agent(FakeLLM([]), strategy="plan", system="Sei knapp.")
+    # Unterhaltung anreichern, dann zurücksetzen.
+    agent.memory.add_user("hallo")
+    cli.handle_slash("/reset", agent, agent.tools, Plan(), None)
+    roles = [m["role"] for m in agent.memory.messages]
+    assert roles == ["system"]  # nur die System-Nachricht bleibt
+    assert "Plan-and-Execute" in agent.memory.messages[0]["content"]
+
+
+def test_cli_parser_defaults_and_oneshot():
+    from agentkit import cli
+    args = cli.build_parser().parse_args(["Schreibe", "fizzbuzz"])
+    assert args.prompt == ["Schreibe", "fizzbuzz"]
+    assert args.strategy == "react"
+    assert args.workspace == "."
+    assert args.yes is False
 
 
 def test_subagent_forwards_events_to_shared_bus():

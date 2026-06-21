@@ -17,7 +17,7 @@ sonst:
 |---|---|---|
 | **Agentic Loop** | `agentkit/agent.py` | streamend & event-basiert; ReAct **und** Plan-and-Execute über `strategy=`; **parallele Tool-Calls**; Harness (max_steps, Retries, Fehlertoleranz, Compaction, Stop-Knopf) |
 | **Tools** | `agentkit/tools.py` | `@registry.tool()` — Schema automatisch aus Typ-Hints + Docstring (oder explizit) |
-| **Coding-Tools** | `agentkit/coding.py` | `CodingTools`: `list_files`/`read_file`/`write_file`/`edit_file`/`run_shell` mit Sandbox + Approval |
+| **Coding-Tools** | `agentkit/coding.py` | `CodingTools`: `list_files`/`glob_files`/`grep`/`read_file`/`write_file`/`edit_file`/`run_shell` mit Sandbox + Approval |
 | **Skills** | `agentkit/skills.py` | `Skills` + `list_skills`/`read_skill`-Tools — Vorgehen als `SKILL.md`-Datei, on demand geladen (offener Agent-Skills-Standard, progressive disclosure) |
 | **Planning** | `agentkit/planning.py` | `Plan` + `update_plan`-Tool — eine mitgeführte, sichtbare Todo-Liste |
 | **Sub-Agents** | `agentkit/subagents.py` | `add_subagent()` — ein Agent als `delegate`-Tool eines Orchestrators (Kontext-Isolation, parallel) |
@@ -69,6 +69,52 @@ def add(a: int, b: int) -> int:
 agent = Agent(azure_from_env(), tools=tools, strategy="react")
 print(agent.run("Was ist 17 + 25?"))
 ```
+
+## CLI (im Stil von Claude Code)
+
+`agentkit` bringt ein Terminal-Frontend mit — derselbe Agent-Loop, nur mit einer
+Konsolen-Oberfläche drumherum (gestreamter Text, sichtbare Tool-Aufrufe, mitgeführter
+Plan, Shell-Approval, Stop-Knopf):
+
+```bash
+agentkit                          # interaktive Session (REPL)
+agentkit "Schreibe fizzbuzz.py + Tests und mach sie grün."   # one-shot
+python -m agentkit                # identisch, ohne installiertes Skript
+```
+
+Die Session ist eine fortlaufende Unterhaltung (das Kurzzeitgedächtnis bleibt über
+die Eingaben erhalten). Live sichtbar:
+
+```
+› Erstelle fizzbuzz.py mit Tests.
+⏺ write_file(path=fizzbuzz.py, content=def fizzbuzz(n):↵…)
+  ⎿ 142 Zeichen nach fizzbuzz.py geschrieben.
+⏺ run_shell(command=python -m pytest -q)
+⚠  Shell-Befehl ausführen?
+  python -m pytest -q
+  [j]a / [N]ein › j
+  ⎿ exit=0
+  ⎿ 4 passed in 0.06s
+Fertig — fizzbuzz.py und die Tests sind grün.
+```
+
+- **Stop-Knopf:** `Ctrl-C` bricht die *laufende* Aufgabe kooperativ ab (wie Esc),
+  statt das Programm zu beenden.
+- **Slash-Befehle:** `/help`, `/clear`, `/reset` (Unterhaltung vergessen), `/plan`,
+  `/tools`, `/skills`, `/exit`.
+- **Approval:** `run_shell` fragt vor jeder Ausführung; `-y/--yes` schaltet das ab.
+
+| Flag | Wirkung |
+|---|---|
+| `-w, --workspace DIR` | Arbeits-/Sandbox-Verzeichnis (Default `.` — das aktuelle Verzeichnis, wie Claude Code) |
+| `-s, --strategy {react,plan,plain}` | Agenten-Strategie (Default `react`) |
+| `--skills DIR` | Skills (`SKILL.md`-Ordner) aktivieren — on demand geladen |
+| `--memory FILE` | Langzeitgedächtnis (JSONL) für `remember`/`recall` |
+| `--provider {auto,azure,openai}` | LLM-Provider (Default `auto` — aus der `.env` erraten) |
+| `-y, --yes` | Shell ohne Rückfrage ausführen |
+| `-p, --print` | one-shot: nur die finale Antwort ausgeben (skriptbar) |
+
+Zugangsdaten kommen wie bei den Beispielen aus der `.env` (siehe `.env.example`).
 
 ## ReAct vs. Plan-and-Execute
 
