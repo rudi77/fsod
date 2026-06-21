@@ -45,10 +45,11 @@ python3 benchmarks/bench_python.py
 | `frontmatter_parse` | YAML-Frontmatter einer `SKILL.md` parsen |
 | `json_roundtrip` | Tool-Argument-Objekt serialisieren + parsen |
 
-## Ergebnisse
+## Ergebnisse & Analyse
 
-Aktuelle Zahlen liegen in [`RESULTS.md`](RESULTS.md) (wird von `compare.py`
-geschrieben). Richtwert auf Linux/Python 3.11: Rust ist je nach Szenario **~2.6×–5.3×**
+Aktuelle Rohzahlen liegen in [`RESULTS.md`](RESULTS.md) (wird von `compare.py`
+geschrieben). Die **eingeordnete Auswertung mit Handlungsempfehlung** („lohnt sich
+ein Umstieg auf Rust?") steht in [`ANALYSE.md`](ANALYSE.md). Richtwert auf Linux/Python 3.11: Rust ist je nach Szenario **~2.6×–5.3×**
 schneller, geometrisches Mittel **≈ 3.6×**. Rechenlastige, allokationsarme Pfade
 (Token-/Frontmatter-Parsing) profitieren am stärksten; der volle Agent-Loop weniger,
 weil dort JSON-Value-Allokation und Thread-Aufbau auf beiden Seiten anfallen.
