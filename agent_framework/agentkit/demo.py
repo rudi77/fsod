@@ -129,8 +129,13 @@ class DemoLLM:
 
 def _answer_chunks(text: str):
     """Streamt Wort für Wort — zeigt den Streaming-Pfad. Das trennende Leerzeichen
-    bleibt am Wort, sodass die Stücke wieder den Originaltext ergeben."""
-    return [_chunk(content=part) for part in re.findall(r"\S+\s*|\s+", text)]
+    bleibt am Wort (wie Rusts `split_inclusive(' ')`), sodass die Stücke wieder den
+    Originaltext ergeben."""
+    words = text.split(" ")
+    return [
+        _chunk(content=w + (" " if i < len(words) - 1 else ""))
+        for i, w in enumerate(words)
+    ]
 
 
 def _parse_addition(text: str) -> Optional[Tuple[int, int]]:
