@@ -20,8 +20,9 @@ use std::sync::{Arc, Mutex};
 use agentkit::coding::ApproveFn;
 use agentkit::demo::demo_tools;
 use agentkit::{
-    build_coding_agent, load_dotenv, new_cancel, strategy_from_str, Agent, AgentEvent, AgentRole,
-    CodingAgentConfig, EventBus, EventData, Llm, Plan, ShortTermMemory, Skills, Strategy, DONE,
+    build_coding_agent, load_dotenv, new_cancel, render_steps, strategy_from_str, Agent, AgentEvent,
+    AgentRole, CodingAgentConfig, EventBus, EventData, Llm, Plan, ShortTermMemory, Skills, Strategy,
+    DONE,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -47,7 +48,11 @@ fn main() -> std::io::Result<()> {
     load_dotenv();
 
     // Farben: nur, wenn ein Terminal vorliegt und nicht --no-color (auf Windows VT aktivieren).
-    let color = !args.no_color && std::io::stdout().is_terminal() && enable_vt();
+    // `NO_COLOR` (https://no-color.org/) schaltet Farben unabhängig vom Terminal ab.
+    let color = !args.no_color
+        && std::env::var_os("NO_COLOR").is_none()
+        && std::io::stdout().is_terminal()
+        && enable_vt();
     let pal = if color { Pal::color() } else { Pal::plain() };
 
     // Stop-Knopf: Ctrl-C bricht die laufende Aufgabe kooperativ ab (zweimal = beenden).
@@ -78,7 +83,7 @@ fn main() -> std::io::Result<()> {
     if !task.is_empty() || args.print_mode {
         if task.is_empty() {
             eprintln!("Keine Aufgabe übergeben.");
-            return Ok(());
+            std::process::exit(2);
         }
         let (_agent, final_) = run_task(agent, &task, &mut renderer);
         if args.print_mode {
@@ -321,10 +326,10 @@ impl Renderer {
                 self.end_stream();
                 self.print_result(result, &tag);
             }
-            EventData::Plan(text) => {
+            EventData::Plan(steps) => {
                 self.end_stream();
                 println!("{}📋 Plan{}", p.magenta, p.reset);
-                for line in text.lines() {
+                for line in render_steps(steps, "\n").lines() {
                     println!("{}   {line}{}", p.magenta, p.reset);
                 }
             }
@@ -442,7 +447,6 @@ fn build_agent(args: &Args, pal: Pal) -> (Agent, Plan, Option<Skills>, Vec<Agent
         agents: args.agents.as_deref(),
         memory: args.memory.as_deref(),
         subagents: !args.no_subagents,
-        plan_sep: "\n",
     };
     build_coding_agent(llm, &cfg, approve)
 }
