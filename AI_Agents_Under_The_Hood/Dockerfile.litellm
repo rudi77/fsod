@@ -1,8 +1,10 @@
 # LiteLLM-Gateway (DB-Variante: Admin-UI/Prisma) + der Microsoft-365-MCP-Server.
 #
-# Das Basis-Image (Wolfi/Chainguard) bringt Node bereits mit - LiteLLM kann also
-# stdio-MCP-Server als Subprozess starten. Wir installieren nur den ms-365-Server
-# global vor (schnellerer Start als npx; siehe litellm_config.yaml -> mcp_servers.ms365).
+# Das Basis-Image (Wolfi) bringt Node bereits mit, aber NICHT npm - das ist ein
+# eigenes Wolfi-Paket. Wir installieren npm nach und den ms-365-Server global vor
+# (schnellerer Start als npx; siehe litellm_config.yaml -> mcp_servers.ms365).
 FROM ghcr.io/berriai/litellm-database:main-latest
 
-RUN npm install -g @softeria/ms-365-mcp-server
+# npm fehlt im Basis-Image -> ueber den Wolfi-Paketmanager nachinstallieren.
+RUN apk add --no-cache npm \
+ && npm install -g @softeria/ms-365-mcp-server
