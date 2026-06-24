@@ -1,10 +1,10 @@
-"""Ein echter MCP-Server (offizielles `mcp`-SDK, FastMCP) für den Vortrag.
+"""Ein echter MCP-Server (offizielles `mcp`-SDK, FastMCP).
 
 Er spricht das echte Model Context Protocol (JSON-RPC 2.0 über stdio) und
 stellt drei Tools bereit, die ein LLM allein NICHT zuverlässig kann:
 
   - current_time : Live-Serverzeit (kann das Modell nicht wissen)
-  - add          : deterministische Arithmetik (zeigt sauber, dass das Tool lief)
+  - add          : deterministische Arithmetik
   - search_kb    : durchsucht eine kleine Wissensdatenbank ("deine Daten via MCP")
 
 Start (von Hand zum Ausprobieren):  uv run python mcp_demo_server.py
