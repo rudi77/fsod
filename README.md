@@ -30,6 +30,13 @@ agentkit --demo "Was ist 17 + 25?"
 Ohne API-Key läuft ein netzfreier Demo-Modus; für ein echtes Modell `OPENAI_API_KEY`
 oder die `AZURE_OPENAI_*`-Variablen setzen.
 
+## 📖 Benutzerhandbuch (für Endanwender)
+
+Wer nur das `agentkit`-Kommando nutzt (kein Rust), findet **alles Nötige** im
+**[Benutzerhandbuch](agent_framework_rs/docs/USER_MANUAL.md)**: Betriebsarten, Werkzeuge,
+Optionen, Sicherheit — und ein **Kochbuch**, mit dem du komplette Workflows (wie den
+Accounts-Payable-Prozess) in PowerShell oder Bash selbst baust.
+
 ## agentkit als Unix-/PowerShell-Kommando
 
 Die Rust-Executable ist ein vollwertiger, komponierbarer CLI-Filter: stdin = Kontext,
