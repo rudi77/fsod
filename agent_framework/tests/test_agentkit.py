@@ -493,8 +493,53 @@ def test_cli_build_llm_auto_without_creds_falls_back_to_demo(monkeypatch):
     from agentkit.demo import DemoLLM
     monkeypatch.delenv("AZURE_OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
     llm, label = cli.build_llm("auto")
     assert isinstance(llm, DemoLLM) and label.startswith("demo")
+
+
+def _stub_openai_module(monkeypatch, captured: dict):
+    """Ersetzt das `openai`-Paket durch einen Stub, der die Client-Argumente
+    aufzeichnet — so ist der lokale Pfad ohne SDK und ohne Netz testbar."""
+    import sys
+    import types
+
+    stub = types.ModuleType("openai")
+
+    class OpenAI:  # noqa: N801 — Name wie im echten SDK
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    stub.OpenAI = OpenAI
+    monkeypatch.setitem(sys.modules, "openai", stub)
+
+
+def test_openai_from_env_uses_local_base_url(monkeypatch):
+    # OPENAI_BASE_URL -> lokaler OpenAI-kompatibler Server (Ollama & Co.);
+    # ohne OPENAI_API_KEY wird ein Dummy-Key gesetzt (das SDK verlangt einen).
+    from agentkit.llm import openai_from_env
+    captured = {}
+    _stub_openai_module(monkeypatch, captured)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_BASE_URL", "http://localhost:11434/v1")
+    monkeypatch.setenv("OPENAI_MODEL", "qwen2.5-coder")
+    llm = openai_from_env()
+    assert captured == {"base_url": "http://localhost:11434/v1", "api_key": "local"}
+    assert llm.model == "qwen2.5-coder"
+
+
+def test_cli_build_llm_auto_picks_local_server(monkeypatch):
+    # 'auto' erkennt einen lokalen Server allein an OPENAI_BASE_URL (kein Key nötig)
+    # und zeigt die Base-URL im Label.
+    from agentkit import cli
+    captured = {}
+    _stub_openai_module(monkeypatch, captured)
+    monkeypatch.delenv("AZURE_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_BASE_URL", "http://localhost:11434/v1")
+    monkeypatch.setenv("OPENAI_MODEL", "llama3.1")
+    _, label = cli.build_llm("auto")
+    assert label == "openai:llama3.1 @ http://localhost:11434/v1"
 
 
 def test_cli_handle_slash_tools_and_exit(capsys):

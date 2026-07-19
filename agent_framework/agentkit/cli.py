@@ -215,8 +215,10 @@ def build_llm(provider: str = "auto", force_demo: bool = False):
     """Wählt den LLM und gibt `(llm, label)` zurück.
 
     - explizit ``--provider azure|openai``: verlangt die jeweiligen Env-Variablen.
-    - ``auto`` (Default): Azure -> OpenAI -> **Demo** als netzfreier Fallback, damit
-      die installierte Executable auch ohne API-Key sofort läuft.
+      ``openai`` deckt auch **lokale OpenAI-kompatible Server** ab (Ollama, LM
+      Studio, vLLM, …): einfach ``OPENAI_BASE_URL`` setzen, der Key ist optional.
+    - ``auto`` (Default): Azure -> OpenAI/lokal -> **Demo** als netzfreier Fallback,
+      damit die installierte Executable auch ohne API-Key sofort läuft.
     - ``--demo`` (force_demo) bzw. ``--provider demo``: erzwingt den Demo-LLM.
     """
     from .demo import build_llm as select_llm  # Azure -> OpenAI -> DemoLLM
@@ -440,7 +442,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--memory", metavar="FILE", default=None,
                    help="Langzeitgedächtnis-Datei (JSONL) für remember/recall.")
     p.add_argument("--provider", default="auto", choices=["auto", "azure", "openai", "demo"],
-                   help="LLM-Provider (Default: auto — aus der .env erraten, sonst Demo-Fallback).")
+                   help="LLM-Provider (Default: auto — aus der .env erraten, sonst Demo-Fallback). "
+                        "'openai' deckt via OPENAI_BASE_URL auch lokale OpenAI-kompatible "
+                        "Server ab (Ollama, LM Studio, vLLM, …).")
     p.add_argument("--demo", action="store_true",
                    help="Demo-Modus erzwingen (eingebauter, netzfreier LLM — kein API-Key nötig).")
     p.add_argument("--max-steps", type=int, default=160, help="Max. Loop-Schritte pro Aufgabe.")

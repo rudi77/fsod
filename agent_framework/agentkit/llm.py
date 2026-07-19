@@ -6,7 +6,9 @@ Ein LLM ist *Text rein -> Text raus*. Diese dünne Hülle kapselt genau das:
 
 Bewusst KEINE eigene Abstraktion über die OpenAI-Chunks: der Agent-Loop arbeitet
 direkt mit dem OpenAI-Format (`choices[0].delta...`). Das hält das Framework klein
-und kompatibel zu Azure OpenAI / OpenAI.
+und kompatibel zu Azure OpenAI / OpenAI — und damit auch zu jedem **lokalen
+OpenAI-kompatiblen Server** (Ollama, LM Studio, vLLM, llama.cpp, …), der nur eine
+andere Base-URL braucht (`OPENAI_BASE_URL`).
 """
 
 from __future__ import annotations
@@ -58,8 +60,19 @@ def azure_from_env() -> "LLM":
 
 
 def openai_from_env() -> "LLM":
-    """Baut einen Standard-OpenAI-LLM (OPENAI_API_KEY, optional OPENAI_MODEL)."""
+    """Baut einen Standard-OpenAI-LLM (OPENAI_API_KEY, optional OPENAI_MODEL).
+
+    Mit `OPENAI_BASE_URL` zeigt derselbe Pfad auf einen **lokalen OpenAI-kompatiblen
+    Server** (Ollama, LM Studio, vLLM, llama.cpp, …), z. B.
+    `http://localhost:11434/v1`. Der API-Key ist dann optional — lokale Server
+    ignorieren ihn meist, das SDK verlangt aber irgendeinen Wert.
+    """
     from openai import OpenAI
 
-    client = OpenAI()
+    base_url = os.environ.get("OPENAI_BASE_URL")
+    if base_url:
+        client = OpenAI(base_url=base_url,
+                        api_key=os.environ.get("OPENAI_API_KEY") or "local")
+    else:
+        client = OpenAI()  # liest OPENAI_API_KEY selbst
     return LLM(client, os.environ.get("OPENAI_MODEL", "gpt-4o-mini"))

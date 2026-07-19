@@ -110,11 +110,16 @@ Fertig — fizzbuzz.py und die Tests sind grün.
 | `-s, --strategy {react,plan,plain}` | Agenten-Strategie (Default `react`) |
 | `--skills DIR` | Skills (`SKILL.md`-Ordner) aktivieren — on demand geladen |
 | `--memory FILE` | Langzeitgedächtnis (JSONL) für `remember`/`recall` |
-| `--provider {auto,azure,openai}` | LLM-Provider (Default `auto` — aus der `.env` erraten) |
+| `--provider {auto,azure,openai,demo}` | LLM-Provider (Default `auto` — aus der `.env` erraten) |
 | `-y, --yes` | Shell ohne Rückfrage ausführen |
 | `-p, --print` | one-shot: nur die finale Antwort ausgeben (skriptbar) |
 
 Zugangsdaten kommen wie bei den Beispielen aus der `.env` (siehe `.env.example`).
+
+**Lokale Modelle** (Ollama, LM Studio, vLLM, llama.cpp, …) laufen über denselben
+OpenAI-Pfad: `OPENAI_BASE_URL` auf den lokalen Server zeigen lassen (z. B.
+`http://localhost:11434/v1` für Ollama) und `OPENAI_MODEL` auf das geladene Modell —
+ein API-Key ist dann optional. Tool-Calling braucht ein Modell mit Function-Calling.
 
 ## ReAct vs. Plan-and-Execute
 

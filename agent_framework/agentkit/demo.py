@@ -28,12 +28,16 @@ def build_llm(force_demo: bool = False) -> Tuple[object, str]:
                 return azure_from_env(), f"azure:{dep}"
             except Exception:
                 pass
-        if os.environ.get("OPENAI_API_KEY"):
+        # OPENAI_BASE_URL allein reicht: lokale OpenAI-kompatible Server
+        # (Ollama, LM Studio, vLLM, …) brauchen keinen API-Key.
+        if os.environ.get("OPENAI_API_KEY") or os.environ.get("OPENAI_BASE_URL"):
             try:
                 from .llm import openai_from_env
 
                 model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
-                return openai_from_env(), f"openai:{model}"
+                base = os.environ.get("OPENAI_BASE_URL")
+                label = f"openai:{model} @ {base}" if base else f"openai:{model}"
+                return openai_from_env(), label
             except Exception:
                 pass
     return DemoLLM(), "demo (kein Netz)"
@@ -121,7 +125,8 @@ class DemoLLM:
         # 3) Sonst: direkte Demo-Antwort.
         text = (
             f"Demo-Modus (kein Netz): Ich habe »{user.strip()}« erhalten. Setze einen "
-            "API-Key (OPENAI_API_KEY oder AZURE_OPENAI_*), um ein echtes Modell zu nutzen. "
+            "API-Key (OPENAI_API_KEY oder AZURE_OPENAI_*) oder OPENAI_BASE_URL für einen "
+            "lokalen Server (Ollama & Co.), um ein echtes Modell zu nutzen. "
             "Probier z. B. »17 + 25« oder »Wetter in Berlin«."
         )
         return iter(_answer_chunks(text))
