@@ -1,8 +1,12 @@
 # Benchmarks: Rust vs. Python (agentkit)
 
-Vergleicht den **Framework-Overhead** des Rust-Ports
-([`../agent_framework_rs`](../agent_framework_rs)) mit dem Python-Original
+Vergleicht den **Framework-Overhead** des Rust-Ports mit dem Python-Original
 ([`../agent_framework`](../agent_framework)).
+
+> Der Rust-Port ist nach **[rudi77/agentkit_rs](https://github.com/rudi77/agentkit_rs)**
+> umgezogen. Die Skripte hier erwarten ihn weiterhin unter `../agent_framework_rs` —
+> dafür das agentkit_rs-Repo klonen und `agent_framework_rs` hierher verlinken oder
+> die Pfade in `compare.py` anpassen.
 
 ## Warum FakeLLM?
 

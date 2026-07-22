@@ -1,3 +1,0 @@
-# Beispiel-PDFs sind Binärdateien (u. a. ZUGFeRD mit eingebettetem XML) — keine
-# Zeilenende-Normalisierung, sonst brechen die xref-Offsets / eingebetteten Streams.
-*.pdf binary

@@ -1,0 +1,32 @@
+[
+  {
+    "zeit": "2026-07-11T01:15:22",
+    "bis": null,
+    "anzahl": 1,
+    "id": 1001,
+    "quelle": "Windows Error Reporting",
+    "level": "Informationen",
+    "log": "Application",
+    "text": "Fehlerbucket 1234567890, Typ 5. Ereignisname: WindowsUpdateFailure3. Antwort: Nicht verfuegbar."
+  },
+  {
+    "zeit": "2026-07-11T03:30:04",
+    "bis": null,
+    "anzahl": 1,
+    "id": 1000,
+    "quelle": "Microsoft-Windows-Defrag",
+    "level": "Informationen",
+    "log": "Application",
+    "text": "Die Datentraegeroptimierung wurde erfolgreich fuer Volume (C:) abgeschlossen."
+  },
+  {
+    "zeit": "2026-07-11T04:14:07",
+    "bis": "2026-07-11T07:44:07",
+    "anzahl": 43,
+    "id": 1000,
+    "quelle": "Application Error",
+    "level": "Fehler",
+    "log": "Application",
+    "text": "Name der fehlerhaften Anwendung: WWS-AppServer.exe, Version: 7.3.1.0. Name des fehlerhaften Moduls: KERNELBASE.dll, Version: 10.0.20348.2527. Ausnahmecode: 0xe0434352. Ausnahme: Npgsql.NpgsqlException: Die Verbindung zu 127.0.0.1:5432 wurde abgelehnt (Connection refused)."
+  }
+]

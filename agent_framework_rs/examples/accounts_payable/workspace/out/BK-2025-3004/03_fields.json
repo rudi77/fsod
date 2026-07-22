@@ -1,0 +1,26 @@
+{
+  "lieferant": {
+    "name": "Büromöbel König",
+    "anschrift": "Stuhlgasse 14, 04109 Leipzig",
+    "ust_idnr": "DE100200300"
+  },
+  "empfaenger": {
+    "name": "Kreativagentur Sonnenschein GmbH"
+  },
+  "rechnungsnummer": "BK-2025-3004",
+  "rechnungsdatum": "2025-07-17",
+  "leistungsdatum": "2025-07-16",
+  "positionen": [
+    {
+      "beschreibung": "Höhenverstellbare Schreibtische (4 Stk)",
+      "betrag": 1120.0
+    }
+  ],
+  "betraege": {
+    "netto": 1120.0,
+    "steuersatz_prozent": 19,
+    "steuerbetrag": 212.8,
+    "brutto": 1332.8,
+    "waehrung": "EUR"
+  }
+}

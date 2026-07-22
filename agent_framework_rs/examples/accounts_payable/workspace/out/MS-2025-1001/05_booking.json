@@ -1,0 +1,38 @@
+{
+  "buchung_moeglich": true,
+  "grund_falls_blockiert": null,
+  "kontenrahmen": "SKR03",
+  "kostenstelle": "KST-4700",
+  "freigabe_verantwortliche": "PER-001",
+  "beleg": {
+    "rechnungsnummer": "MS-2025-1001",
+    "belegdatum": "2025-06-30",
+    "lieferant": "Malerbetrieb Sommer"
+  },
+  "buchungszeilen": [
+    {
+      "konto": "4800",
+      "bezeichnung": "Reparaturen und Instandhaltung",
+      "soll": 850,
+      "haben": 0,
+      "buchungstext": "Rechnung MS-2025-1001 Malerbetrieb Sommer, Leistungsdatum 2025-06-30"
+    },
+    {
+      "konto": "1576",
+      "bezeichnung": "Vorsteuer 19%",
+      "soll": 161.5,
+      "haben": 0,
+      "buchungstext": "Vorsteuer aus Rechnung MS-2025-1001 Malerbetrieb Sommer"
+    },
+    {
+      "konto": "1600",
+      "bezeichnung": "Verbindlichkeiten aus Lieferungen und Leistungen",
+      "soll": 0,
+      "haben": 1011.5,
+      "buchungstext": "Rechnung MS-2025-1001 Malerbetrieb Sommer"
+    }
+  ],
+  "summe_soll": 1011.5,
+  "summe_haben": 1011.5,
+  "ausgeglichen": true
+}

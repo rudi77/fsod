@@ -1,0 +1,200 @@
+{
+  "session": {
+    "id": "01KY4XKZ6AG1H836S7CDJ06G01",
+    "agent_template_id": null,
+    "policy": {
+      "budget_tokens": 100000,
+      "watermarks": {
+        "soft": 0.6,
+        "hard": 0.8,
+        "emergency": 0.95
+      },
+      "externalize_threshold_tokens": 2000,
+      "tokenizer": "claude",
+      "kinds": {
+        "assistant_msg": {
+          "ttl_turns": 40,
+          "externalize": false,
+          "refetchable": false,
+          "promote": false
+        },
+        "decision": {
+          "ttl_turns": null,
+          "externalize": false,
+          "refetchable": false,
+          "promote": true
+        },
+        "mcp_resource": {
+          "ttl_turns": 3,
+          "externalize": false,
+          "refetchable": true,
+          "promote": false
+        },
+        "ref_expansion": {
+          "ttl_turns": 1,
+          "externalize": true,
+          "refetchable": false,
+          "promote": false
+        },
+        "skill_content": {
+          "ttl_turns": 8,
+          "externalize": false,
+          "refetchable": true,
+          "promote": false
+        },
+        "task": {
+          "ttl_turns": null,
+          "externalize": false,
+          "refetchable": false,
+          "promote": false
+        },
+        "tool_result": {
+          "ttl_turns": 2,
+          "externalize": true,
+          "refetchable": false,
+          "promote": false
+        },
+        "user_msg": {
+          "ttl_turns": 40,
+          "externalize": false,
+          "refetchable": false,
+          "promote": false
+        }
+      },
+      "compaction": {
+        "model": "claude-haiku-4-5",
+        "prompt_template_id": "default-v1",
+        "max_share": 0.5
+      },
+      "promotion": {
+        "sink": {
+          "type": "file",
+          "url": null
+        }
+      },
+      "retention": {
+        "blob_grace_hours": 72,
+        "evicted_blob_retention_days": 0,
+        "archived_session_blobs": "delete",
+        "sweep_interval": "24h"
+      },
+      "on_tool_removed": "externalize"
+    },
+    "context_version": 7,
+    "static_epoch": 1,
+    "current_turn": 2,
+    "status": "active",
+    "created_at": 1784724192458,
+    "updated_at": 1784724192463
+  },
+  "segments": [
+    {
+      "id": "01KY4XKZ6B47W8ZX7ZKVSN6W0B",
+      "session_id": "01KY4XKZ6AG1H836S7CDJ06G01",
+      "region": "static",
+      "kind": "system_prompt",
+      "source": "agentkit",
+      "role": "system",
+      "content": "Arbeite nach dem ReAct-Muster: Überlege in kurzen Schritten, was als Nächstes sinnvoll ist, rufe dann ein Tool auf, beobachte das Ergebnis und entscheide den nächsten Schritt. Wenn du genug weißt, antworte final ohne weiteren Tool-Aufruf.",
+      "blob_ref": null,
+      "refetchable": false,
+      "origin": null,
+      "summary": null,
+      "tool_call_id": null,
+      "frame_id": null,
+      "pinned": false,
+      "created_turn": 0,
+      "last_referenced_turn": 0,
+      "tokens": 60,
+      "seq": 0,
+      "state": "live"
+    },
+    {
+      "id": "01KY4XKZ6CX97KKXBSAVA9ZZSN",
+      "session_id": "01KY4XKZ6AG1H836S7CDJ06G01",
+      "region": "working",
+      "kind": "user_msg",
+      "source": null,
+      "role": "user",
+      "content": "Was ist 2 + 2?",
+      "blob_ref": null,
+      "refetchable": false,
+      "origin": null,
+      "summary": null,
+      "tool_call_id": null,
+      "frame_id": null,
+      "pinned": false,
+      "created_turn": 0,
+      "last_referenced_turn": 0,
+      "tokens": 4,
+      "seq": 0,
+      "state": "live"
+    },
+    {
+      "id": "01KY4XKZ6ESBN4A2R5K95FVW3X",
+      "session_id": "01KY4XKZ6AG1H836S7CDJ06G01",
+      "region": "working",
+      "kind": "tool_call",
+      "source": "add",
+      "role": "assistant",
+      "content": "{\"a\":2,\"b\":2}",
+      "blob_ref": null,
+      "refetchable": false,
+      "origin": null,
+      "summary": null,
+      "tool_call_id": "demo-add",
+      "frame_id": null,
+      "pinned": false,
+      "created_turn": 1,
+      "last_referenced_turn": 1,
+      "tokens": 4,
+      "seq": 1,
+      "state": "live"
+    },
+    {
+      "id": "01KY4XKZ6E7WB3CSQ1DNB66081",
+      "session_id": "01KY4XKZ6AG1H836S7CDJ06G01",
+      "region": "working",
+      "kind": "tool_result",
+      "source": null,
+      "role": "tool",
+      "content": "4",
+      "blob_ref": null,
+      "refetchable": false,
+      "origin": null,
+      "summary": null,
+      "tool_call_id": "demo-add",
+      "frame_id": null,
+      "pinned": false,
+      "created_turn": 1,
+      "last_referenced_turn": 1,
+      "tokens": 1,
+      "seq": 2,
+      "state": "live"
+    },
+    {
+      "id": "01KY4XKZ6F4SRZ19YDRCFZ6A69",
+      "session_id": "01KY4XKZ6AG1H836S7CDJ06G01",
+      "region": "working",
+      "kind": "assistant_msg",
+      "source": null,
+      "role": "assistant",
+      "content": "Ergebnis: 4",
+      "blob_ref": null,
+      "refetchable": false,
+      "origin": null,
+      "summary": null,
+      "tool_call_id": null,
+      "frame_id": null,
+      "pinned": false,
+      "created_turn": 2,
+      "last_referenced_turn": 2,
+      "tokens": 3,
+      "seq": 3,
+      "state": "live"
+    }
+  ],
+  "frames": [],
+  "next_seq": 4,
+  "next_event_seq": 7
+}
