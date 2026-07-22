@@ -219,3 +219,6 @@ __marimo__/
 
 # CodeGraph-Index (lokal, nicht einchecken)
 .codegraph/
+agent_framework_rs/
+ctxman_rs/
+agent_benchmarks/
